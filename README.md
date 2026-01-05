@@ -52,6 +52,42 @@ make clean
 sbt clean
 ```
 
+# Signals in pipeline
+### IF/ID register:
+- instruction: 32 bits
+- PC: 32 bits
+- ???
+
+### ID/EX register:
+- rs1_data: 32 bits
+- rs2_data: 32 bits
+- immediate: 32 bits
+- rd: 5 bits
+- ALUOp: 4 bits (R-type: add, sub, and, or, xor, sll, srl, sra osv)
+- ALUSrc: 1 bit
+- rs1_address 5 bit (Forwarding)
+- rs2_address 5 bit(Forwarding) 
+- RegWrite signal 1 bit
+- PC
+- MemToReg 1 bit
+### EX/MEM 
+- ALU_Result
+- rd: 5 bits
+- RegWrite 1 bit
+- MemRead 1 bit
+- MemWrite 1 bit
+- rs2_data 32 bit (ex. sw rs2, offset(rs1))
+- MemToReg 1 bit
+
+### MEM/WB)
+- ALU_Result: 32 bit
+- Memory_data: 32 bits 
+- rd 5 bits (destination)
+- RegWrite 1 bit
+- MemToReg 1 bit
+
+
+
 ## Dependencies
 
 - Chisel 5.1.0 - Hardware construction language
