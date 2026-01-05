@@ -1,19 +1,32 @@
 # RiscV-processor
-RiscV processor on FPGA following DTU course 02114 <placeholder>
+RiscV processor on FPGA following DTU course 02114
 
 ## Project Structure
 
 ```
-.
-├── build.sbt                    # SBT build configuration with Chisel dependencies
+RiscV-Processor/
 ├── project/
-│   └── build.properties         # SBT version specification
+│   └── build.properties       # Specifies the sbt version
 ├── src/
 │   ├── main/
-│   │   └── scala/              # Main Chisel source code
+│   │   ├── scala/
+│   │   │   ├── core/          # The actual processor logic
+│   │   │   │   ├── ALU.scala
+│   │   │   │   ├── ControlUnit.scala
+│   │   │   │   ├── RegisterFile.scala
+│   │   │   │   ├── InstructionFetch.scala
+│   │   │   │   └── Core.scala # Top-level module connecting components
+│   │   │   └── Top.scala      # The entry point to generate Verilog
+│   │   └── resources/         # Hex files for instruction memory initialization
 │   └── test/
-│       └── scala/              # ChiselTest test files
-└── Makefile                     # Build automation (test, compile, clean)
+│       └── scala/             # Unit tests for your modules
+│           ├── ALUTest.scala
+│           └── CoreTest.scala
+├── generated/                 # Output folder for the Verilog file
+├── build.sbt                  # The build configuration file
+├── Makefile
+├── .gitignore
+└── README.md
 ```
 
 ## Building and Testing
