@@ -29,8 +29,32 @@ out/
 .bloop/
 .bsp/
 
-# Mac
+# ===== macOS =====
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Spotlight
+.Spotlight-V100
+
+# Trash
+.Trashes
+
+# ===== Windows =====
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+Desktop.ini
+
+$RECYCLE.BIN/
+
+# Windows shortcuts
+*.lnk
 
 # Generated files
 *.class
