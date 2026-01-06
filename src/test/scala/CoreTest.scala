@@ -7,25 +7,22 @@ import org.scalatest.flatspec.AnyFlatSpec
 class CoreTest extends AnyFlatSpec with ChiselScalatestTester {
   behavior of "RISC-V Core"
 
-  it should "execute addi instruction correctly" in {
+  it should "write to register x1 and read it back" in {
     test(new Core).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       
-      // --- CYCLE 0 (Time = 0) ---
-      // Reset is done. PC is 0.
-      // The instruction 12300093 is currently on the wires.
-      // The ALU is calculating 0 + 0x123 = 0x123 (291) combinatorially right now.
-      
-      dut.io.pc_out.expect(0.U)       // PC is 0
-      dut.io.alu_res.expect(291.U)    // ALU result is ready immediately (combinatorial)
+      // --- CYCLE 0: addi x1, x0, 0x123 ---
+      dut.io.pc_out.expect(0.U)
+      dut.io.alu_res.expect(0x123.U) // Verify calculation
+      dut.clock.step(1) // x1 is written here
 
-      // --- CLOCK EDGE ---
-      dut.clock.step(1) 
-
-      // --- CYCLE 1 (Time = 1) ---
-      // PC has updated to 4.
-      // Register x1 has captured the value 291.
+      // --- CYCLE 1: addi x2, x1, 0 ---
+      dut.io.pc_out.expect(4.U)
       
-      dut.io.pc_out.expect(4.U)       // PC is now 4
+      // The ALU should now be calculating: x1 + 0
+      // If x1 was written correctly, ALU result must be 0x123
+      dut.io.alu_res.expect(0x123.U) 
+      
+      dut.clock.step(1)
     }
   }
 }
