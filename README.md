@@ -1,7 +1,10 @@
 # RiscV-processor
 RiscV processor on FPGA following DTU course 02114
 # Good links
+For Risc V arch:
 https://luplab.gitlab.io/rvcodecjs/#q=mul&abi=false&isa=RV128I
+For Chisel commands:
+https://www.chisel-lang.org/docs/explanations/
 ## Project Structure
 ```
 RiscV-Processor/
@@ -12,6 +15,7 @@ RiscV-Processor/
 │   │   ├── scala/
 │   │   │   ├── core/          # The actual processor logic
 │   │   │   │   ├── ALU.scala
+│   │   │   │   ├── ALUConstanss.scala
 │   │   │   │   ├── ControlUnit.scala
 │   │   │   │   ├── RegisterFile.scala
 │   │   │   │   ├── InstructionFetch.scala
@@ -22,6 +26,8 @@ RiscV-Processor/
 │       └── scala/             # Unit tests for your modules
 │           ├── ALUTest.scala
 │           └── CoreTest.scala
+|           └── RegisterTest.scala
+|
 ├── generated/                 # Output folder for the Verilog file
 ├── build.sbt                  # The build configuration file
 ├── Makefile
