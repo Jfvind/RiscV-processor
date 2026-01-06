@@ -19,6 +19,8 @@ class ControlUnit extends Module {
     val aluSrc      = Output(Bool())
     val aluOp       = Output(UInt(4.W))
     val imm         = Output(UInt(32.W)) // The FINAL selected immediate
+    val memWrite    = Output(Bool())
+    val branch      = Output(Bool())
   })
 
   val opcode = io.instruction(6, 0)
@@ -32,6 +34,8 @@ class ControlUnit extends Module {
   io.aluSrc   := false.B
   io.aluOp    := ALU_ADD
   io.imm      := 0.U
+  io.memWrite := false.B
+  io.branch   := false.B
 
   switch(opcode) {
     // I-Type Arithmetic (ADDI)
@@ -42,5 +46,29 @@ class ControlUnit extends Module {
       io.imm      := immGen.io.imm_i // Select I-Type from ImmGen
     }
     // Add other cases here...
+
+    // S-Type (Store Word - SW) - Opcode: 0100011
+    // Vi skal bruge ALU til at beregne adressen (rs1 + imm_s).
+    // Vi skal IKKE skrive til et register (regWrite = false).
+    // Vi SKAL skrive til hukommelsen (memWrite = true).
+    is("b0100011".U) {
+      io.regWrite := false.B
+      io.aluSrc   := true.B       // Brug immediate til adresse-offset
+      io.aluOp    := ALU_ADD      // Beregn adresse: rs1 + offset
+      io.imm      := immGen.io.imm_s
+      io.memWrite := true.B       // VIGTIGT: Skriv til hukommelsen
+    }
+
+    // B-Type (Branch Greater or Equal - BGE) - Opcode: 1100011
+    // Vi sammenligner to registre.
+    // Vi bruger ALU'ens SLT (Set Less Than) logik.
+    // Hvis rs1 < rs2, bliver resultatet 1. Hvis rs1 >= rs2, bliver resultatet 0.
+    is("b1100011".U) {
+      io.regWrite := false.B
+      io.aluSrc   := false.B      // Sammenlign to registre (ikke immediate)
+      io.aluOp    := ALU_SLT      // Check om rs1 < rs2
+      io.imm      := immGen.io.imm_b
+      io.branch   := true.B       // Signalér at dette er en branch
+    }
   }
 }
