@@ -38,7 +38,9 @@ class ALU extends Module {
   //Helper from ALUConstants
   val useSub = isSub(io.alu_op)
 
-  // 1. SHARED ADDER WITH CARRY (ADD, SUB, SLT, SLTU)
+
+  // =============== 1. SHARED ADDER WITH CARRY (ADD, SUB, SLT, SLTU) ===================
+
   // If sub high -> { B' } Else { B }
   val operand_b_mod = Mux(useSub, ~io.alu_b, io.alu_b)
   // Adder: Result = A + (B | ~B) + (1 hvis SUB, 0 hvis ADD)
@@ -48,7 +50,7 @@ class ALU extends Module {
   val carry_out = adder_full(32)
 
 
-  // 2. COMPARISON UNIT (SLT, SLTU)
+  // =============== 2. COMPARISON UNIT (SLT, SLTU) ===================================
 
   //SLTU
   // Adder shared with A-B -> A + ~B + 1
@@ -68,7 +70,8 @@ class ALU extends Module {
     res_sign,   // If sign is same: Res sign decides
     a_sign)     // If sign different: A's sign decides (Neg < Pos)
 
-  // 3. RESULT MUX
+  // ============== 3. RESULT MUX ======================================
+
   io.result := MuxLookup(io.alu_op, 0.U)(Seq(
     ALU_ADD  -> adder_result,
     ALU_SUB  -> adder_result,

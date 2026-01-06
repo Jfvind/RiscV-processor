@@ -4,7 +4,6 @@ package core
 import chisel3._
 
 /*
-Auth Holm:
 32 registers (x0-x31)
 2 read ports (rs1, rs2)
 1 write port (rd)
