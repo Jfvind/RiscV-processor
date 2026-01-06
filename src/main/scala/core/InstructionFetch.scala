@@ -1,4 +1,6 @@
 // Handles the Program Counter (PC) and fetches instructions from memory.
+package core
+
 import chisel3._
 /*
 Signals:
