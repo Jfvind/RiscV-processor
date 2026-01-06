@@ -9,31 +9,23 @@ class CoreTest extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "execute addi instruction correctly" in {
     test(new Core).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
-      // The simulation starts with Reset high for one cycle automatically.
       
-      // Cycle 0: Reset is released. PC = 0.
-      // Fetch: Instruction at 0x0 is fetched (addi x5, x0, 0)
-      // Decode: Control Unit sees ADDI. Sets ALUOp=ADD, ALUSrc=Imm.
-      // Execute: ALU adds x0 (0) + Imm (0). Result = 0.
-      // WriteBack: x5 gets written with 0 at the END of this cycle (rising edge of next).
+      // --- CYCLE 0 (Time = 0) ---
+      // Reset is done. PC is 0.
+      // The instruction 12300093 is currently on the wires.
+      // The ALU is calculating 0 + 0x123 = 0x123 (291) combinatorially right now.
       
-      dut.clock.step(1)
-      
-      // Let's verify the PC moved
-      dut.io.pc_out.expect(0.U) // PC is 0 during the first instruction execution
-      
-      // Check the ALU result for the first instruction
-      // If program.hex has 00000293 (addi x5, x0, 0), result should be 0
-      dut.io.alu_res.expect(0x123.U)
+      dut.io.pc_out.expect(0.U)       // PC is 0
+      dut.io.alu_res.expect(291.U)    // ALU result is ready immediately (combinatorial)
 
-      dut.clock.step(1)
+      // --- CLOCK EDGE ---
+      dut.clock.step(1) 
+
+      // --- CYCLE 1 (Time = 1) ---
+      // PC has updated to 4.
+      // Register x1 has captured the value 291.
       
-      // Cycle 1: PC should be 4
-      dut.io.pc_out.expect(4.U)
-      
-      // If you had a second instruction, you could check it here.
-      // For example, if 2nd instr is: addi x6, x0, 10 (00a00313)
-      // dut.io.alu_res.expect(10.U)
+      dut.io.pc_out.expect(4.U)       // PC is now 4
     }
   }
 }
