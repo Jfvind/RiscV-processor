@@ -3,7 +3,7 @@ package core
 
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.loadMemoryFromFileInLine
+import chisel3.util.experimental.loadMemoryFromFileInline
 
 class InstructionFetch extends Module {
   val io = IO(new Bundle {
@@ -33,7 +33,7 @@ class InstructionFetch extends Module {
 
   // This embeds the hex file data directly into the generated circuit logic,
   // which allows the default simulator to read it.
-  loadMemoryFromFileInLine(mem, "src/main/resources/program.hex")
+  loadMemoryFromFileInline(mem, "src/main/resources/program.hex")
 
   // Fetch instruction
   // The PC is in bytes, but memory is indexed by words (32-bit).
