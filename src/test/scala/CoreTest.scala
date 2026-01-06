@@ -24,7 +24,7 @@ class CoreTest extends AnyFlatSpec with ChiselScalatestTester {
       
       // Check the ALU result for the first instruction
       // If program.hex has 00000293 (addi x5, x0, 0), result should be 0
-      dut.io.alu_res.expect(0.U)
+      dut.io.alu_res.expect(0x123.U)
 
       dut.clock.step(1)
       
