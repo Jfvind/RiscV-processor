@@ -3,7 +3,7 @@ package core
 
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.loadMemoryFromFile
+import chisel3.util.experimental.loadMemoryFromFileInLine
 
 class InstructionFetch extends Module {
   val io = IO(new Bundle {
@@ -31,9 +31,9 @@ class InstructionFetch extends Module {
   // 16KB = 4096 words of 32 bits
   val mem = Mem(4096, UInt(32.W))
 
-  // Load hex file for simulation/FPGA initialization
-  // You must place a file named "program.hex" in your root directory or src/main/resources
-  loadMemoryFromFile(mem, "src/main/resources/program.hex")
+  // This embeds the hex file data directly into the generated circuit logic,
+  // which allows the default simulator to read it.
+  loadMemoryFromFileInLine(mem, "src/main/resources/program.hex")
 
   // Fetch instruction
   // The PC is in bytes, but memory is indexed by words (32-bit).
