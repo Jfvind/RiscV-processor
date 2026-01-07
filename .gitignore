@@ -74,3 +74,6 @@ test_run_dir/
 *.anno.json
 *.vcd
 *.sv
+
+# Vivado
+RiscV-processor/
