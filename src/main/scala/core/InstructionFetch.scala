@@ -33,7 +33,7 @@ class InstructionFetch extends Module {
 
   // This embeds the hex file data directly into the generated circuit logic,
   // which allows the default simulator to read it.
-  loadMemoryFromFileInline(mem, "src/main/resources/program.hex")
+  loadMemoryFromFileInline(mem, "src/main/resources/program.mem")
 
   // Fetch instruction
   // The PC is in bytes, but memory is indexed by words (32-bit).
