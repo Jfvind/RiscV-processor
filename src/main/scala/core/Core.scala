@@ -19,7 +19,7 @@ class Core extends Module {
     val pc_out      = Output(UInt(32.W))
     val instruction = Output(UInt(32.W)) // Helpful to see what we fetched
     val alu_res     = Output(UInt(32.W))
-    val io_led      = Output(UInt(1.W))
+    val led      = Output(UInt(1.W))
   })
 
   // 1. Instantiate Modules
@@ -76,7 +76,7 @@ class Core extends Module {
   dataMem.io.address   := alu.io.result        // Adressen beregnes af ALU'en (f.eks. rs1 + imm)
   dataMem.io.writeData := regFile.io.rs2_data  // Data der skal gemmes kommer fra rs2 (til 'sw')
   dataMem.io.memWrite  := decode.io.memWrite   // Control signal fra ControlUnit
-  io.io_led := memIO.io.io_led 
+  io.led := memIO.io.led 
   
   // 6. Debug Outputs
   io.pc_out      := fetch.io.pc

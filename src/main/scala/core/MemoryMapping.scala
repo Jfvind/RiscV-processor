@@ -14,7 +14,7 @@ class MemoryMapping extends Module {
     val readData  = Output(UInt(32.W))
 
     // Fysiske pins til FPGA'en
-    val io_led    = Output(UInt(1.W))
+    val led    = Output(UInt(1.W))
   })
 
   // 1. Instantiér den rigtige DataMemory
@@ -53,5 +53,5 @@ class MemoryMapping extends Module {
     ledReg := io.writeData(0)
   }
 
-  io.io_led := ledReg
+  io.led := ledReg
 }
