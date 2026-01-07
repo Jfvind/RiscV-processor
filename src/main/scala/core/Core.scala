@@ -27,7 +27,8 @@ class Core extends Module {
   val decode  = Module(new ControlUnit()) // Contains ImmGen
   val regFile = Module(new RegisterFile())
   val alu     = Module(new ALU())
-  val dataMem = Module(new DataMemory()) // Instantiér data hukommelse
+
+  
   // Core kender ikke forskel på RAM og LED - det styrer dette modul.
   val memIO   = Module(new MemoryMapping())
 
@@ -72,10 +73,6 @@ class Core extends Module {
   memIO.io.writeData := regFile.io.rs2_data  // Data fra register (til sw)
   memIO.io.memWrite  := decode.io.memWrite   // Control signal
 
-  // 5. Wiring Data Memory
-  dataMem.io.address   := alu.io.result        // Adressen beregnes af ALU'en (f.eks. rs1 + imm)
-  dataMem.io.writeData := regFile.io.rs2_data  // Data der skal gemmes kommer fra rs2 (til 'sw')
-  dataMem.io.memWrite  := decode.io.memWrite   // Control signal fra ControlUnit
   io.led := memIO.io.led 
   
   // 6. Debug Outputs
