@@ -19,6 +19,7 @@ class Core extends Module {
     val pc_out      = Output(UInt(32.W))
     val instruction = Output(UInt(32.W)) // Helpful to see what we fetched
     val alu_res     = Output(UInt(32.W))
+    val io_led      = Output(UInt(1.W))
   })
 
   // 1. Instantiate Modules
@@ -27,6 +28,8 @@ class Core extends Module {
   val regFile = Module(new RegisterFile())
   val alu     = Module(new ALU())
   val dataMem = Module(new DataMemory()) // Instantiér data hukommelse
+  // Core kender ikke forskel på RAM og LED - det styrer dette modul.
+  val memIO   = Module(new MemoryMapping())
 
   // 2. Wiring Instruction Fetch
   // Send instruction from Fetch to Control Unit
@@ -63,11 +66,18 @@ class Core extends Module {
   // If aluSrc is true, use Immediate. Else use rs2_data.
   alu.io.alu_b  := Mux(decode.io.aluSrc, decode.io.imm, regFile.io.rs2_data)
 
+  // 5. Wiring Memory System (NYT)
+  // Vi forbinder ALU og RegisterFile til vores nye MemoryMapping modul
+  memIO.io.address   := alu.io.result        // Adressen fra ALU (f.eks. 100 til LED)
+  memIO.io.writeData := regFile.io.rs2_data  // Data fra register (til sw)
+  memIO.io.memWrite  := decode.io.memWrite   // Control signal
+
   // 5. Wiring Data Memory
   dataMem.io.address   := alu.io.result        // Adressen beregnes af ALU'en (f.eks. rs1 + imm)
   dataMem.io.writeData := regFile.io.rs2_data  // Data der skal gemmes kommer fra rs2 (til 'sw')
   dataMem.io.memWrite  := decode.io.memWrite   // Control signal fra ControlUnit
-
+  io.io_led := memIO.io.io_led 
+  
   // 6. Debug Outputs
   io.pc_out      := fetch.io.pc
   io.instruction := fetch.io.instruction
