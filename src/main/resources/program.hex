@@ -1,2 +1,28 @@
-12300093
-00008113
+# --- SETUP ---
+addi x1, x0, 100    # x1 = LED Adresse (Vores hack-adresse)
+addi x2, x0, 1      # x2 = TÆND værdi (1)
+addi x3, x0, 5      # x3 = Delay tid (5 loops i simulation)
+
+# --- HOVED LOOP (START) ---
+START:
+    # 1. Tænd LED
+    sw x2, 0(x1)    # Skriv 1 til adresse 100 -> LED Tænder
+
+    # 2. Delay Loop (Vent lidt)
+    addi x4, x0, 0          # Nulstil tæller (x4 = 0)
+DELAY1:
+    addi x4, x4, 1          # Tæl en op
+    bge x3, x4, DELAY1      # Hvis x3 (5) >= x4, så hop tilbage til DELAY1 (offset -4)
+
+    # 3. Sluk LED
+    sw x0, 0(x1)    # Skriv 0 (x0 er altid 0) til adresse 100 -> LED Slukker
+
+    # 4. Delay Loop (Vent lidt igen)
+    addi x4, x0, 0          # Nulstil tæller
+DELAY2:
+    addi x4, x4, 1          # Tæl en op
+    bge x3, x4, DELAY2      # Hop tilbage hvis ikke færdig
+
+    # 5. Start forfra (uendeligt loop)
+    # Vi bruger bge som et "Always Jump" ved at sammenligne 0 >= 0
+    bge x0, x0, START       # Hop helt tilbage til START
