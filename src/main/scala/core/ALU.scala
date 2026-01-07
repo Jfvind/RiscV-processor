@@ -29,7 +29,12 @@ class ALU extends Module {
     val alu_a   = Input(UInt(32.W)) // IN val 1 til ALU
     val alu_b   = Input(UInt(32.W)) // IN val 2 til ALU
     val alu_op = Input(UInt(4.W)) // opcode
+
     val result = Output(UInt(32.W)) //result after calc
+
+    // BRANCH FLAG
+    val less_signed = Output(Bool()) // Til BLT, BGE
+    val less_unsigned = Output(Bool()) // Til BLTU, BGEU
     val zero   = Output(Bool()) // Zero Flag for Branches
   })
 
@@ -49,6 +54,10 @@ class ALU extends Module {
   val adder_result = adder_full(31,0) //bottom 32 bit -> res
   val carry_out = adder_full(32)
 
+  //================ 2. Flag ==========================================================
+  //check ADDER result for minimizing gate delay compared to after MUX
+  io.zero := (adder_result === 0.U)
+
 
   // =============== 2. COMPARISON UNIT (SLT, SLTU) ===================================
 
@@ -56,7 +65,7 @@ class ALU extends Module {
   // Adder shared with A-B -> A + ~B + 1
   // If carry out = 0 -> Borrow, thus A < B
   // if Carry = 1 -> No borrow and thus A >= B
-  val less_unsigned = !carry_out
+  io.less_unsigned := !carry_out
 
   //SLT
   // Logic: (A < B) <=> (SignBit_Result != Overflow_XOR_SignBits)
@@ -66,7 +75,7 @@ class ALU extends Module {
   val a_sign = io.alu_a(31)
   val b_sign = io.alu_b(31)
   val res_sign = adder_result(31)
-  val less_signed = Mux(a_sign === b_sign,
+  io.less_signed := Mux(a_sign === b_sign,
     res_sign,   // If sign is same: Res sign decides
     a_sign)     // If sign different: A's sign decides (Neg < Pos)
 
@@ -81,10 +90,7 @@ class ALU extends Module {
     ALU_SLL  -> (io.alu_a << shamt),
     ALU_SRL  -> (io.alu_a >> shamt),
     ALU_SRA  -> (io.alu_a.asSInt >> shamt).asUInt,
-    ALU_SLT  -> less_signed.asUInt,   // Free due to adder logic
-    ALU_SLTU -> less_unsigned.asUInt  // Free due to carry
+    ALU_SLT  -> io.less_signed.asUInt,   // Free due to adder logic
+    ALU_SLTU -> io.less_unsigned.asUInt  // Free due to carry
   ))
-
-  // Zero flag for BEQ
-  io.zero := (io.result === 0.U)
 }
