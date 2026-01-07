@@ -26,16 +26,16 @@ OPCODE IN ALUConstants:
 //TODO: Adder chain -> look forward, shifter: Barrel shifter, MUXLookup, 10-way mux...
 class ALU extends Module {
   val io = IO(new Bundle {
-    val alu_a   = Input(UInt(32.W))
-    val alu_b   = Input(UInt(32.W))
-    val alu_op = Input(UInt(4.W))
-    val result = Output(UInt(32.W))
+    val alu_a   = Input(UInt(32.W)) // IN val 1 til ALU
+    val alu_b   = Input(UInt(32.W)) // IN val 2 til ALU
+    val alu_op = Input(UInt(4.W)) // opcode
+    val result = Output(UInt(32.W)) //result after calc
     val zero   = Output(Bool()) // Zero Flag for Branches
   })
 
   // Shift amount: only bottom 5 bits as of 32-bit arch (RISC-V spec)
   val shamt = io.alu_b(4, 0)
-  //Helper from ALUConstants
+  //Helper from ALUConstants that decides if we need sub op
   val useSub = isSub(io.alu_op)
 
 
