@@ -29,12 +29,13 @@ class InstructionFetch extends Module {
   // We use a synchronous memory (SyncReadMem) or combinational (Mem).
   // For simple single-cycle/5-stage, combinational read (Mem) is easier to reason about initially.
   // 16KB = 4096 words of 32 bits
-  //val mem = Mem(4096, UInt(32.W))
+  val mem = Mem(4096, UInt(32.W))
 
   // This embeds the hex file data directly into the generated circuit logic,
   // which allows the default simulator to read it.
-  //loadMemoryFromFileInline(mem, "src/main/resources/program.mem")
-
+  //loadMemoryFromFileInline(mem, "src/main/resources/program.mem") // for test
+  loadMemoryFromFileInline(mem, "program.mem") // for FPGA
+/*
   // --- CORRECTED BLINK PROGRAM (Using only addi, sw, bge) ---
   val rom = VecInit(
     // --- SETUP ---
@@ -70,15 +71,15 @@ class InstructionFetch extends Module {
     // Replaced 'nop' with 'addi x0, x0, 0' (0x00000013)
     "h00000013".U(32.W), 
     "h00000013".U(32.W)
-  )
+  )*/
 
   // Fetch instruction
   // The PC is in bytes, but memory is indexed by words (32-bit).
   // So we divide PC by 4 (or shift right by 2) to get the index.
-  //io.instruction := mem(pc >> 2)
+  io.instruction := mem(pc >> 2)
 
-  val romIndex = (pc >> 2)(5,0)
-  io.instruction := rom(romIndex)
+  //val romIndex = (pc >> 2)(5,0)
+  //io.instruction := rom(romIndex)
 
   // Output the current PC
   io.pc := pc
