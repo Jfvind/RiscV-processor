@@ -1,35 +1,38 @@
-// Decodes the instruction (opcode, funct3, funct7) and generates control signals (e.g., aluOp, memWrite, regWrite).
+/*
+* Control Unit:
+* Decodes the 32-bit instruction (opcode, funct3, funct7) into control signals.
+* It interprets what the instruction represents and distributes theses signals to the rest
+* of the processor to execute the intended opeation.
+* Type: Pure Combinational logic (Output depends solely on current Input).
+*/
 package core
 
 import chisel3._
 import chisel3.util._
-import core.ALUConstants._
-
-/*
-Input: instruction[31:0] (fra IF/ID register)
-Output: Alle control signals (RegWrite, ALUOp, ALUSrc, MemRead, MemWrite, MemToReg, etc.)
-Kombinatorisk logic der decoder opcode, funct3, funct7
- */
+import core.ALUConstants._ // ALUConstans is a dict which enable us to use mneomonic codes e.g., ALU_ADD instead of raw "magic numbers".
 
 class ControlUnit extends Module {
   val io = IO(new Bundle {
-    val instruction = Input(UInt(32.W))
+    val instruction = Input(UInt(32.W))   // Input: Full 32-bit instruction from the Fetch stage
 
-    val regWrite    = Output(Bool())
-    val aluSrc      = Output(Bool())
-    val aluOp       = Output(UInt(4.W))
-    val imm         = Output(UInt(32.W)) // The FINAL selected immediate
-    val memWrite    = Output(Bool())
-    val branch      = Output(Bool())
+    val regWrite    = Output(Bool())      // Enables writing to the destination register (rd).
+    val aluSrc      = Output(Bool())      // Controls MUX on the input B of the ALU: either (rs2) or (imm)
+    val aluOp       = Output(UInt(4.W))   // 4-bit code for ALU, differentiating and defining operation at hand for the ALU.
+    val imm         = Output(UInt(32.W))  // The extracted immediate from the instruction, now extended to 32 bits via sign extension.
+    val memWrite    = Output(Bool())      // Write enable for our data memory (RAM)
+    val branch      = Output(Bool())      // Indicates a branch instruction --> Fetch-state (for PC logic). Combined with ALU result to decide if we jump.
   })
 
-  val opcode = io.instruction(6, 0)
+  // ============================================
+  // DECODE INSTRUCTIONS HERE
+  // Slice the 32-bit intstruction into its components (opcode, funct3, etc.) --> implement fully later (MVP for now --> only opcode needed for current functionality)
+    val opcode = io.instruction(6, 0)
+  // ============================================
 
-  // Instantiate ImmGen
-  val immGen = Module(new ImmGen())
-  immGen.io.instruction := io.instruction
+  val immGen = Module(new ImmGen()) // Instantiating the immediate generator
+  immGen.io.instruction := io.instruction // Connecting instruction input to the ImmGen module
 
-  // Default signals
+  // Default signals: for defined behaviour when being synthesized
   io.regWrite := false.B
   io.aluSrc   := false.B
   io.aluOp    := ALU_ADD
@@ -38,7 +41,7 @@ class ControlUnit extends Module {
   io.branch   := false.B
 
   switch(opcode) {
-    // I-Type Arithmetic (ADDI)
+    // I-Type Arithmetic (ADDI) - Opcode: 0010011
     is("b0010011".U) {
       io.regWrite := true.B
       io.aluSrc   := true.B
@@ -48,27 +51,21 @@ class ControlUnit extends Module {
     // Add other cases here...
 
     // S-Type (Store Word - SW) - Opcode: 0100011
-    // Vi skal bruge ALU til at beregne adressen (rs1 + imm_s).
-    // Vi skal IKKE skrive til et register (regWrite = false).
-    // Vi SKAL skrive til hukommelsen (memWrite = true).
     is("b0100011".U) {
       io.regWrite := false.B
-      io.aluSrc   := true.B       // Brug immediate til adresse-offset
-      io.aluOp    := ALU_ADD      // Beregn adresse: rs1 + offset
+      io.aluSrc   := true.B       // Use immediate for adress calculation
+      io.aluOp    := ALU_ADD      // Calculate address: rs1 + offset
       io.imm      := immGen.io.imm_s
-      io.memWrite := true.B       // VIGTIGT: Skriv til hukommelsen
+      io.memWrite := true.B       // Store data in memory
     }
 
-    // B-Type (Branch Greater or Equal - BGE) - Opcode: 1100011
-    // Vi sammenligner to registre.
-    // Vi bruger ALU'ens SLT (Set Less Than) logik.
-    // Hvis rs1 < rs2, bliver resultatet 1. Hvis rs1 >= rs2, bliver resultatet 0.
+    // B-type (Branch Greater or Equal - BGE) - Opcode: 1100011
     is("b1100011".U) {
       io.regWrite := false.B
-      io.aluSrc   := false.B      // Sammenlign to registre (ikke immediate)
-      io.aluOp    := ALU_SLT      // Check om rs1 < rs2
+      io.aluSrc   := false.B      // Compare two registers not immediate.
+      io.aluOp    := ALU_SLT      // Check if rs1 < rs2 --> if false, then rs1 >= rs2 --> branch taken.
       io.imm      := immGen.io.imm_b
-      io.branch   := true.B       // Signalér at dette er en branch
+      io.branch   := true.B       // Signal that this is a branch.
     }
   }
 }
