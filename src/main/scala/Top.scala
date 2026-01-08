@@ -6,21 +6,16 @@ import core.Core
 class Top extends Module {
   val io = IO(new Bundle {
     val led = Output(UInt(1.W)) // Matches "io_led" in XDC
-  })
+  }) // The debug outputs from Core are left unconnected (ignored)
 
-  //val core = Module(new Core())
 
-  // Connect the Core's LED output to the Top output
-  //io.led := core.io.led
-  
-  // The debug outputs from Core are left unconnected (ignored)
-// --- FREE-RUNNING CLOCK DIVIDER ---
-  // We use 'withReset(false.B)' to force this counter to IGNORE the external reset.
+  // --- FREE-RUNNING CLOCK DIVIDER ---
+  // We use 'withReset(false.B)' to force this counter to IGNORE the reset button.
   // This ensures the clock keeps ticking even when you hold the Reset button.
   val slowClock = withReset(false.B) {
     val cnt = RegInit(0.U(25.W))
     cnt := cnt + 1.U
-    cnt(20).asClock // ~95 Hz (Visible Blink)
+    cnt(20).asClock // ~95 Hz (for a visible blink)
   }
 
   // --- CORE INSTANTIATION ---
