@@ -27,7 +27,7 @@ class RegisterFile extends Module {
   })
 
 
-  // ========== STORAGE IMPLEMENTATION ==============
+  // --- STORAGE IMPLEMENTATION ---
   //32 regs for debugging purposes when ready do MEM for FPGA LUT RAM as this will be huge in
   //flip flops
   val registers = RegInit(VecInit(Seq.fill(32)(0.U(32.W))))
