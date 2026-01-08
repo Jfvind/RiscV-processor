@@ -5,53 +5,37 @@ import chisel3.util._
 
 class MemoryMapping extends Module {
   val io = IO(new Bundle {
-    // Signaler fra Core
+    // Signals from Core
     val address   = Input(UInt(32.W))
     val writeData = Input(UInt(32.W))
     val memWrite  = Input(Bool())
     
-    // Signaler tilbage til Core
-    val readData  = Output(UInt(32.W))
-
-    // Fysiske pins til FPGA'en
-    val led    = Output(UInt(1.W))
+    val readData  = Output(UInt(32.W)) // Read data from RAM
+    val led    = Output(UInt(1.W))    // State of LED for FPGA
   })
 
-  // 1. Instantiér den rigtige DataMemory
+  // Instantiate real DataMemory (RAM)
   val dataMem = Module(new DataMemory())
 
-  // 2. Definér Base-adressen for IO
-  // HACK: Vi bruger adresse 100 (0x64) til test, da vi kun har 'addi'
-  // (Senere skal dette rettes tilbage til "hF0000000".U)
-  val mmioBase = 100.U(32.W)
+  // Define IO-address (LED)
+  val mmioBase = 100.U(32.W) // Maybe change to higher address when full implementation is done  !!==!!
 
-  // 3. Dekoder: Hvor peger adressen hen?
+  // LED or DataMemory
   val isLed = (io.address === mmioBase)
   
-  // Hvis vi IKKE snakker med LED, så snakker vi med RAM
-  // Vi tilføjer en ekstra sikkerhed: Det er kun RAM, hvis adressen IKKE er LED
-  val isRam = !isLed
+  val isRam = !isLed // If not an IO then it is RAM (DataMemory)
 
-  // ---------------------------------------------------------
-  // RAM LOGIK
-  // ---------------------------------------------------------
+  // --- RAM LOGIK ---
   dataMem.io.address   := io.address
   dataMem.io.writeData := io.writeData
-  
-  // Vi må KUN skrive i RAM, hvis 'memWrite' er høj OG det er en RAM-adresse
-  dataMem.io.memWrite  := io.memWrite && isRam
+  dataMem.io.memWrite  := io.memWrite && isRam // Only writing to RAM if writing is asked and the address is in RAM
+  io.readData := dataMem.io.readData // Data from the address is available as output
 
-  io.readData := dataMem.io.readData
-
-  // ---------------------------------------------------------
-  // LED LOGIK
-  // ---------------------------------------------------------
+  // --- LED LOGIK ---
   val ledReg = RegInit(0.U(1.W))
-
-  // Hvis vi skriver til adresse 100, opdateres LED'en
-  when(io.memWrite && isLed) {
+  when(io.memWrite && isLed) {  // When writing is enabled and address is the LED, the LED value is updated
     ledReg := io.writeData(0)
   }
 
-  io.led := ledReg
+  io.led := ledReg // Connecting output
 }

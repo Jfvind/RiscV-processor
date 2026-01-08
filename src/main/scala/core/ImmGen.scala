@@ -16,7 +16,7 @@ class ImmGen extends Module {
   val sign = io.instruction(31)
 
   // I-Type
-  io.imm_i := Cat(Fill(20, sign), io.instruction(31, 20))
+  io.imm_i := Cat(Fill(20, sign), io.instruction(31, 20)) // Using sign-extension to match 32-bit length
 
   // S-Type
   io.imm_s := Cat(Fill(20, sign), io.instruction(31, 25), io.instruction(11, 7))

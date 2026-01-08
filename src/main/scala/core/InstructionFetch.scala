@@ -8,18 +8,18 @@ import chisel3.util.experimental.loadMemoryFromFileInline
 class InstructionFetch extends Module {
   val io = IO(new Bundle {
     // Inputs from the Control Unit / ALU
-    val jump_target_pc = Input(UInt(32.W)) // The address to jump/branch to
-    val pc_select      = Input(Bool())     // 0 = PC+4, 1 = Jump Target
+    val jump_target_pc = Input(UInt(32.W))  // The address to jump/branch to
+    val branch_taken      = Input(Bool())   // 0 = PC+4, 1 = Jump Target
 
     // Outputs to the Decode Stage
-    val pc             = Output(UInt(32.W)) // Current PC (needed for relative jumps)
+    val pc             = Output(UInt(32.W)) // Current PC (needed for jumps)
     val instruction    = Output(UInt(32.W)) // The fetched instruction
   })
 
   // Program Counter Register
   val pc = RegInit(0.U(32.W))
-  // If pc_select is true, we jump. Otherwise, we move to the next instruction (PC + 4).
-  val next_pc = Mux(io.pc_select, io.jump_target_pc, pc + 4.U)
+  // If branch_taken is true, we jump. Otherwise, we move to the next instruction (PC + 4).
+  val next_pc = Mux(io.branch_taken, io.jump_target_pc, pc + 4.U)
   pc := next_pc
 
   //============= Work in progress!!===================================================================
@@ -52,9 +52,6 @@ class InstructionFetch extends Module {
     // --- REPEAT ---
     // We use bge x0, x0, -32 to jump back to instruction 16.
     "hfe0050e3".U(32.W), // 48: bge x0, x0, -32     (Jump back to 16)
-    // --- STALLS ---
-    "h00000013".U(32.W), // 52: addi x0, x0, 0      (nop)
-    "h00000013".U(32.W)  // 56: addi x0, x0, 0      (nop)
   )
 
   //================= Work in progress!!===================================
@@ -63,7 +60,7 @@ class InstructionFetch extends Module {
   //io.instruction := mem(pc >> 2)
   //=======================================================================
 
-  val romIndex = (pc >> 2) //(3,0)
+  val romIndex = (pc >> 2)(3,0) // Choose relavant bits to avoid index out of bounds
   io.instruction := rom(romIndex)
 
   // Output the current PC
