@@ -48,7 +48,6 @@ class RegisterFile extends Module {
   // Asynchronous read (combinational logic). (Should it be syncronous????? ==!!!==)
   // We use a Multiplexer (Mux) to enforce the x0 constraint:
   // If the address is 0, ALWAYS output 0. Otherwise, read from storage.
-  //NOTE: I do not know if this guard is a MUST, but Mr. Claude said it would be a necessity
   io.rs1_data := Mux(io.rs1_addr === 0.U, 0.U, registers(io.rs1_addr))
   io.rs2_data := Mux(io.rs2_addr === 0.U, 0.U, registers(io.rs2_addr))
 }
