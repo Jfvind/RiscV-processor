@@ -27,16 +27,15 @@ class RegisterFile extends Module {
   })
 
 
-  // ========== STORAGE IMPLEMENTATION ==============
-  //From hints: make 32 regs for debugging purposes when ready do MEM for FPGA LUT RAM as this will be huge in
+  // --- STORAGE IMPLEMENTATION ---
+  //32 regs for debugging purposes when ready do MEM for FPGA LUT RAM as this will be huge in
   //flip flops
-  // Using RegInit creates 32 individual registers initialized to 0.
   val registers = RegInit(VecInit(Seq.fill(32)(0.U(32.W))))
 
   // PROD / SYNTHESIS MODE:
   // val registers = Mem(32, UInt(32.W))
 
-  // ========== WRITE LOGIC ========================
+  // --- WRITE LOGIC ---
   // Write happens on the rising edge of the clock
   // We guard the write with two conditions:
   // 1. reg_write is high (write enable).
@@ -45,9 +44,8 @@ class RegisterFile extends Module {
     registers(io.rd_addr) := io.rd_data
   }
 
-  // ========= READ LOGIC ===========================
-
-  // Asynchronous read (combinational logic).
+  // --- READ LOGIC ---
+  // Asynchronous read (combinational logic). (Should it be syncronous????? ==!!!==)
   // We use a Multiplexer (Mux) to enforce the x0 constraint:
   // If the address is 0, ALWAYS output 0. Otherwise, read from storage.
   //NOTE: I do not know if this guard is a MUST, but Mr. Claude said it would be a necessity
