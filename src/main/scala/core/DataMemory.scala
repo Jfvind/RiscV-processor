@@ -16,10 +16,9 @@ class DataMemory extends Module {
   })
 
   // 16KB hukommelse (4096 words af 32 bits)
-  // Vi bruger 'Mem' som er standard i Chisel til simulering
-  val memory = Mem(4096, UInt(32.W))
+  val memory = Mem(4096, UInt(32.W)) // Convert to Syncreadmem????
 
-  // Læsning: Sker altid (async read for denne type Mem)
+  // Læsning: Sker altid (async read for denne type Mem) Correct????
   // Vi dividerer adressen med 4 (address >> 2) fordi memory er indekseret i words,
   // men CPU'en arbejder med byte-adresser.
   io.readData := memory(io.address >> 2)
