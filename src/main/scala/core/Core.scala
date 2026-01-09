@@ -26,8 +26,8 @@ class Core extends Module {
   // Branch if ControlUnit says "branch" AND the given condition is true.
   // BGE uses ALU operation SLT (Set Less Than).
   // If (rs1 < rs2) then SLT = 1.
-  // If (rs1 >= rs2) then SLT = 0.
-  val branch_taken = decode.io.branch && (alu.io.result === 0.U)
+  // If (rs1 >= rs2) then SLT = 0. (we wan't this since we count up)
+  val branch_taken = decode.io.branch && !alu.io.less_signed
   fetch.io.branch_taken      := branch_taken             // Fetch is told whether to branch or not
   fetch.io.jump_target_pc := fetch.io.pc + decode.io.imm // Branch adress
   
