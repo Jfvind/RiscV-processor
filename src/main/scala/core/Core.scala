@@ -31,7 +31,7 @@ class Core extends Module {
   fetch.io.branch_taken      := branch_taken             // Fetch is told whether to branch or not
   fetch.io.jump_target_pc := fetch.io.pc + decode.io.imm // Branch adress
   
-  // Wiring Register File
+  // Wiring Register File.
   regFile.io.rs1_addr := fetch.io.instruction(19, 15) // RS1 is bits [19:15]
   regFile.io.rs2_addr := fetch.io.instruction(24, 20) // RS2 is bits [24:20]
   regFile.io.rd_addr  := fetch.io.instruction(11, 7)  // RD is bits [11:7]
