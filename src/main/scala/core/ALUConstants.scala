@@ -21,6 +21,7 @@ object ALUConstants {
   val ALU_SRA  = 7.U(OP_WIDTH)
   val ALU_SLT  = 8.U(OP_WIDTH)
   val ALU_SLTU = 9.U(OP_WIDTH)
+  val ALU_LUI  = 10.U(OP_WIDTH)
 
   // Helper function: Checks if the operation requires substra
   // This is used to reduce area of the ALU utilizing boolean alg. IE: A + B and A - B can utilize same adder,

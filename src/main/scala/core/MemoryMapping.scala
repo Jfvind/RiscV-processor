@@ -11,31 +11,38 @@ class MemoryMapping extends Module {
     val memWrite  = Input(Bool())
     
     val readData  = Output(UInt(32.W)) // Read data from RAM
-    val led    = Output(UInt(1.W))    // State of LED for FPGA
+    val led       = Output(UInt(1.W))  // State of LED for FPGA
+
+    // UART
+    val uartData  = Output(UInt(32.W))
+    val uartAddr  = Output(UInt(32.W))
+    val uartValid = Output(Bool())
   })
 
   // Instantiate real DataMemory (RAM)
   val dataMem = Module(new DataMemory())
 
-  // Define IO-address (LED)
-  val mmioBase = 100.U(32.W) // Maybe change to higher address when full implementation is done  !!==!!
+  // --- ADDRESS MAPPING ---
+  val isLed = (io.address === 100.U)
+  val isUart = (io.address >= 200.U) && (io.address < 400.U) // x00 = 200, x01 = 204, x31 = 324
+  val isRam = !isLed && !isUart // If not an IO then it is RAM (DataMemory)
 
-  // LED or DataMemory
-  val isLed = (io.address === mmioBase)
-  
-  val isRam = !isLed // If not an IO then it is RAM (DataMemory)
-
-  // --- RAM LOGIK ---
+  // --- RAM LOGIC ---
   dataMem.io.address   := io.address
   dataMem.io.writeData := io.writeData
   dataMem.io.memWrite  := io.memWrite && isRam // Only writing to RAM if writing is asked and the address is in RAM
   io.readData := dataMem.io.readData // Data from the address is available as output
 
-  // --- LED LOGIK ---
+  // --- LED LOGIC ---
   val ledReg = RegInit(0.U(1.W))
   when(io.memWrite && isLed) {  // When writing is enabled and address is the LED, the LED value is updated
     ledReg := io.writeData(0)
   }
 
   io.led := ledReg // Connecting output
+
+  // --- UART LOGIC ---
+  io.uartValid := io.memWrite && isUart
+  io.uartAddr  := io.address
+  io.uartData  := io.writeData
 }

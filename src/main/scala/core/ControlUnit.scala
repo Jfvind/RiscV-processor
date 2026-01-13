@@ -25,8 +25,10 @@ class ControlUnit extends Module {
 
   // ============================================
   // DECODE INSTRUCTIONS HERE
-  // Slice the 32-bit intstruction into its components (opcode, funct3, etc.) --> implement fully later (MVP for now --> only opcode needed for current functionality)
+  // Slice the 32-bit intstruction into its components (opcode, funct3, etc.)
     val opcode = io.instruction(6, 0)
+    val funct3 = io.instruction(14,12) // for ADD/SUB
+    val funct7 = io.instruction(31,25)
   // ============================================
 
   val immGen = Module(new ImmGen()) // Instantiating the immediate generator
@@ -48,7 +50,14 @@ class ControlUnit extends Module {
       io.aluOp    := ALU_ADD
       io.imm      := immGen.io.imm_i // Select I-Type from ImmGen
     }
-    // Add other cases here...
+
+    // R-type (ADD (for now)) - Opcode: 0110011
+    is("b0110011".U) {
+      io.regWrite := true.B
+      io.aluSrc   := false.B
+      io.aluOp    := ALU_ADD
+      io.imm      := 0.U
+    }
 
     // S-Type (Store Word - SW) - Opcode: 0100011
     is("b0100011".U) {
@@ -66,6 +75,16 @@ class ControlUnit extends Module {
       io.aluOp    := ALU_SLT      // Check if rs1 < rs2 --> if false, then rs1 >= rs2 --> branch taken.
       io.imm      := immGen.io.imm_b
       io.branch   := true.B       // Signal that this is a branch.
+    }
+
+    // U-type (Load Upper Immediate - LUI) - Opcode: 0110111
+    is("b0110111".U) {
+      io.regWrite := true.B
+      io.aluSrc   := true.B
+      io.aluOp    := ALU_LUI
+      io.imm      := immGen.io.imm_u
+      io.memWrite := false.B
+      io.branch   := false.B
     }
   }
 }
