@@ -1,12 +1,12 @@
 import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
-import core.Core
+import core._
 
 class CoreTest extends AnyFlatSpec with ChiselScalatestTester {
 
   "Pipelined Core" should "handle hazards and UART output correctly" in {
-    test(new Core) { c =>
+    test(new Core(Programs.uartPipelineTest)) { c =>
       
       // Helper to step and print PC for debugging
       def step(n: Int = 1): Unit = {

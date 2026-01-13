@@ -11,7 +11,7 @@ class Top extends Module {
   }) // The debug outputs from Core are left unconnected (ignored)
 
 // --- CORE INSTANTIATION ---
-  val core = Module(new Core())
+  val core = Module(new Core(Programs.uartPipelineTest)) // DONT DELETE: Programs.??? controls what program is syntezised to FPGA
   io.led := core.io.led
 
   // --- UART INSTANTIATION ---
