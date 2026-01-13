@@ -44,10 +44,22 @@ class RegisterFile extends Module {
     registers(io.rd_addr) := io.rd_data
   }
 
-  // --- READ LOGIC ---
+  // --- READ LOGIC (WITH BYPASS) ---
   // Asynchronous read (combinational logic). (Should it be syncronous????? ==!!!==)
-  // We use a Multiplexer (Mux) to enforce the x0 constraint:
+
+  // BYPASS LOGIC FIX:
+  // Check if we are trying to read from the s ame register that is currently being written to.
+  // If yes -> Forward the 'rd_data' directly to the output.
+  // If no -> Read from the registers storage as usual.
+
+  val rs1_hazard = io.reg_write && io.rs1_addr =/= 0.U && io.rs1_addr === io.rd_addr
+  val rs2_hazard = io.reg_write && io.rs2_addr =/= 0.U && io.rs2_addr === io.rd_addr
+
+  // We use a Multiplexer (Mux) to enforce the x0 constraint AND the hazard bypass:
   // If the address is 0, ALWAYS output 0. Otherwise, read from storage.
-  io.rs1_data := Mux(io.rs1_addr === 0.U, 0.U, registers(io.rs1_addr))
-  io.rs2_data := Mux(io.rs2_addr === 0.U, 0.U, registers(io.rs2_addr))
+  io.rs1_data := Mux(rs1_hazard, io.rd_data, 
+                 Mux(io.rs1_addr === 0.U, 0.U, registers(io.rs1_addr)))
+
+  io.rs2_data := Mux(rs2_hazard, io.rd_data, 
+                 Mux(io.rs2_addr === 0.U, 0.U, registers(io.rs2_addr)))
 }

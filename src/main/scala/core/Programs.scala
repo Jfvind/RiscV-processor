@@ -75,6 +75,45 @@ object Programs {
     // --- REPEAT (Jump back to start) ---
     "hfe0050e3".U(32.W)  // 48: bge x0, x0, -32     (Jump back to 16)
   )
+
+  /* 
+  ======= PROGRAM 3: Pipeline Stress Test (Torture Test) =======
+  Tester: 
+    1. Data Hazards (EX --> EX og MEM --> EX forwarding)
+    2. Control Hazards (Branch Flushing)
+  */
+  val pipelineStressTest = Seq(
+    // FASE 1: Data Hazards
+    // Cycle 0 (Fetch): x1 = 10
+    "h00a00093".U(32.W), //  0: addi x1, x0, 10 
+    
+    // Cycle 1 (Fetch): x2 = x1 + 5 = 15. 
+    // Hazard! x1 is in EX. Needs EX-to-EX forwarding.
+    "h00508113".U(32.W), //  4: addi x2, x1, 5 
+
+    // Cycle 2 (Fetch): x3 = 20. (Fyld)
+    "h01400193".U(32.W), //  8: addi x3, x0, 20
+
+    // Cycle 3 (Fetch): x4 = x2 + x1 = 15 + 10 = 25.
+    // Hazard! x2 is in MEM, x1 is in WB. Needs MEM-to-EX and RegFile read.
+    "h00110233".U(32.W), // 12: add x4, x2, x1
+
+    // FASE 2: Control Hazards (Branching)
+    // Cycle 4 (Fetch): Branch! if 0 >= 0 (True) jump +8 (til PC=24)
+    "h00005463".U(32.W), // 16: bge x0, x0, 8
+    
+    // Cycle 5 (Fetch): NEEDS FLUSHING. x5 = 999.
+    // This instruction is created in the pipeline but should die (become NOP)
+    "h3e700293".U(32.W), // 20: addi x5, x0, 999 
+
+    // Cycle 6 (Fetch): Target. x6 = 100.
+    "h06400313".U(32.W), // 24: addi x6, x0, 100
+
+    // End loop
+    "h00000013".U(32.W), // 28: nop
+    "h00000013".U(32.W), // 32: nop
+    "h00000013".U(32.W)  // 36: nop
+  )
 }
 
 
