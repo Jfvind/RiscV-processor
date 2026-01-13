@@ -14,7 +14,3 @@ compile:
 # Clean build artifacts
 clean:
 	sbt clean
-
-# Generates Verilog
-run:
-	sbt run
