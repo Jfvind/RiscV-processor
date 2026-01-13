@@ -1,7 +1,7 @@
 import chisel3._
 import chisel3.util._
-import circt.stage.ChiselStage
-import core.Core
+import _root_.circt.stage.ChiselStage
+import core._
 
 // A wrapper module that hides debug signals and only exposes the LED
 class Top extends Module {
