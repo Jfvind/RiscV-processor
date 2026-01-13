@@ -4,7 +4,7 @@ import chisel3.util._
 
 // --- UART HELPER CLASSES ---
 class Channel extends Bundle {
-  val data = Input(Bits(8.W))
+  val bits = Input(Bits(8.W))
   val ready = Output(Bool())
   val valid = Input(Bool())
 }
@@ -24,7 +24,7 @@ class Buffer extends Module {
 
   when (stateReg === empty) {
     when (io.in.valid) {
-      dataReg := io.in.data
+      dataReg := io.in.bits
       stateReg := full
     }
   } .otherwise {
@@ -32,7 +32,7 @@ class Buffer extends Module {
       stateReg := empty
     }
   }
-  io.out.data := dataReg
+  io.out.bits := dataReg
 }
 
 class Tx(sysclk: Int, baudRate: Int) extends Module {
@@ -59,7 +59,7 @@ class Tx(sysclk: Int, baudRate: Int) extends Module {
     } .otherwise {
       when (io.channel.valid) {
         // Start bit (0) + Data + Stop bits (11)
-        shiftReg := Cat(Cat(3.U, io.channel.data), 0.U)
+        shiftReg := Cat(Cat(3.U, io.channel.bits), 0.U)
         bitsReg := 11.U
       } .otherwise {
         shiftReg := 0x7ff.U

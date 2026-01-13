@@ -1,6 +1,6 @@
 import chisel3._
 import chisel3.util._
-import chisel3.stage.ChiselStage
+import chisel3.stage._
 import core.Core
 
 // A wrapper module that hides debug signals and only exposes the LED
@@ -70,6 +70,6 @@ class Top extends Module {
 object Top extends App {
   ChiselStage.emitSystemVerilogFile(
     new Top(),
-    args = Array("--target-dir", "generated")
+    Array("--target-dir", "generated")
   )
 }
