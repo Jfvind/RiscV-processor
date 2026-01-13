@@ -87,7 +87,7 @@ class ALU extends Module {
     ALU_SRL  -> (io.alu_a >> shamt),
     ALU_SRA  -> (io.alu_a.asSInt >> shamt).asUInt, 
     ALU_SLT  -> io.less_signed.asUInt,   // Free due to adder logic
-    ALU_SLTU -> io.less_unsigned.asUInt  // Free due to carry
+    ALU_SLTU -> io.less_unsigned.asUInt,  // Free due to carry
     ALU_LUI  -> io.alu_b
   ))
 }
