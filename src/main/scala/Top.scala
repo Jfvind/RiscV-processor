@@ -24,8 +24,16 @@ class Top extends Module {
   }
 
   // --- INPUTS FROM CORE ---
-  val data = core.io.uartData
-  val addr = core.io.uartAddr
+  val dataReg = RegInit(0.U(32.W))
+  val addrReg = RegInit(0.U(32.W))
+  
+  when (core.io.uartValid) {
+    dataReg := core.io.uartData
+    addrReg := core.io.uartAddr
+  }
+
+  val data = dataReg
+  val addr = addrReg
 
   // --- CALCULATE REGISTER INDEX ---
   // Address 200 -> Index 0. Address 204 -> Index 1.
