@@ -18,9 +18,22 @@ class InstructionFetch(program: Seq[UInt]) extends Module {
 
   // Program Counter Register
   val pc = RegInit(0.U(32.W))
-  // If branch_taken is true, we jump. Otherwise, we move to the next instruction (PC + 4).
-  val next_pc = Mux(io.branch_taken, io.jump_target_pc, pc + 4.U)
-  pc := next_pc
+  // Halt mechanism to prevent PC from running beyond program
+  val maxPC = (program.length * 4).U
+  val halted = RegInit(false.B)
+  
+  // Check if we've reached the end of the program
+  when(!halted && pc >= maxPC - 4.U) {
+    halted := true.B
+  }
+  
+  // PC update logic
+  when(!halted) {
+    // If branch_taken is true, we jump. Otherwise, we move to the next instruction (PC + 4).
+    val next_pc = Mux(io.branch_taken, io.jump_target_pc, pc + 4.U)
+    pc := next_pc
+  }
+  // If halted, PC doesn't change (stays at last instruction)
 
   //============= Work in progress!!===================================================================
   // Instruction Memory (16KB size example)
@@ -39,8 +52,15 @@ class InstructionFetch(program: Seq[UInt]) extends Module {
   //io.instruction := mem(pc >> 2)
   //=======================================================================
 
-  val romIndex = (pc >> 2)(3,0) // Choose relavant bits to avoid index out of bounds
-  io.instruction := rom(romIndex)
+  // This supports up to 256 instructions
+  val romIndex = (pc >> 2)(7,0) // Choose relavant bits to avoid index out of bounds
+  // When halted, output NOP instruction
+  // This ensures predictable behavior when program completes
+  val fetchedInstr = Mux(romIndex < program.length.U, 
+                         rom(romIndex), 
+                         0x00000013.U)  // NOP (addi x0, x0, 0)
+  
+  io.instruction := Mux(halted, 0x00000013.U, fetchedInstr)
 
   // Output the current PC
   io.pc := pc

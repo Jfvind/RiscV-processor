@@ -26,10 +26,14 @@ class Top extends Module {
   // --- INPUTS FROM CORE ---
   val dataReg = RegInit(0.U(32.W))
   val addrReg = RegInit(0.U(32.W))
-  
+  val triggerReg = RegInit(false.B)
+
   when (core.io.uartValid) {
     dataReg := core.io.uartData
     addrReg := core.io.uartAddr
+    triggerReg := true.B // Set trigger for next cycle (Delays data by one cycle so dataReg is updated)
+  } .otherwise {
+    triggerReg := false.B //Clear after one cycle
   }
 
   val data = dataReg
@@ -72,7 +76,7 @@ class Top extends Module {
   for (i <- 15 until 32) { asciiVec(i) := 0.U }
 
   serialPort.io.inputString := asciiVec
-  serialPort.io.sendTrigger := core.io.uartValid
+  serialPort.io.sendTrigger := triggerReg
 }
 
 object Top extends App {
