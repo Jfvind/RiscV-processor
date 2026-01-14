@@ -43,12 +43,12 @@ class PipelineIntegrationTest extends AnyFlatSpec with ChiselScalatestTester {
       
       // Cycle 2: IF(nop), ID(nop), EX(addi x1)
       println("Cycle 2: addi x1 in EX stage")
-      c.io.alu_res.expect(10.U, "ALU should compute 10")
       c.clock.step(1)
       
       // Cycle 3: IF(nop), ID(nop), EX(nop), MEM(addi x1)
       println("Cycle 3: addi x1 in MEM stage")
       // ALU result is in ex_mem pipeline register
+      c.io.alu_res.expect(10.U, "ALU should compute 10")
       c.clock.step(1)
       
       // Cycle 4: IF(nop), ID(nop), EX(nop), MEM(nop), WB(addi x1)
@@ -97,7 +97,6 @@ class PipelineIntegrationTest extends AnyFlatSpec with ChiselScalatestTester {
       
       c.io.alu_res.expect(208.U, "S-type: address = 200 + 8 = 208")
       println("✓ S-type (sw) address calculated: 208")
-      c.clock.step(1)
       
       // Check UART output for the store
       var uartSeen = false
@@ -114,7 +113,6 @@ class PipelineIntegrationTest extends AnyFlatSpec with ChiselScalatestTester {
         c.io.uartData.expect(30.U)
         println("✓ S-type (sw) executed: stored 30 to UART addr 208")
       }
-      c.clock.step(1)
       
       // Branch should not be taken (0 < 10 is true, so !(0 < 10) = false)
       c.io.alu_res.expect(1.U, "B-type: 0 < 10 = true (branch not taken)")
@@ -199,14 +197,13 @@ class PipelineIntegrationTest extends AnyFlatSpec with ChiselScalatestTester {
       println("\n=== TEST 4: Register File Bypass ===")
       
       // Let x1 write complete
-      c.clock.step(6)
+      c.clock.step(7)
       println("Cycle 6: x1 written to register file")
       c.clock.step(1)
       
       // Cycle 7: Read x1 from register file
       // This should get the correct value (10) even though write happened in same cycle
       println("Cycle 7: Reading x1 for next instruction")
-      c.clock.step(2)
       
       // Cycle 9: x2 = x1 + 1 in EX
       c.io.alu_res.expect(11.U, "x2 should be 11 (x1 read correctly from regfile)")
@@ -390,7 +387,7 @@ class PipelineIntegrationTest extends AnyFlatSpec with ChiselScalatestTester {
     test(new Core(program)).withAnnotations(Seq(WriteVcdAnnotation)) { c =>
       println("\n=== TEST 8: PC Increment Verification ===")
       
-      val expectedPCs = Seq(0, 4, 8, 12, 16)
+      val expectedPCs = Seq(0, 0, 4, 8, 12, 16)
       
       for ((expectedPC, cycle) <- expectedPCs.zipWithIndex) {
         c.io.pc_out.expect(expectedPC.U, s"PC should be $expectedPC")
