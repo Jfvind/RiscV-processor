@@ -70,6 +70,8 @@ class Core extends Module {
     val branch   = Bool()
     val aluSrc   = Bool()
     val aluOp    = UInt(4.W)
+    val funct3   = UInt(3.W)
+    val funct7   = UInt(7.W)
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
@@ -90,6 +92,8 @@ class Core extends Module {
     id_ex.branch   := decode.io.branch
     id_ex.aluSrc   := decode.io.aluSrc
     id_ex.aluOp    := decode.io.aluOp
+    id_ex.funct3   := if_id_instr(14, 12)
+    id_ex.funct7   := if_id_instr(31, 25)
   }
 
   // ==============================================================================
@@ -134,14 +138,30 @@ class Core extends Module {
     1.U -> mem_wb.result,
     2.U -> ex_mem.alu_result
   ))
+//instantiate ALUDecode
+  val aluDecoder = Module(new ALUDecoder())
+  // wire in
+  aluDecoder.io.aluOp  := id_ex.aluOp   // 2-bit fra Control Unit
+  aluDecoder.io.funct3 := id_ex.funct3  // 3-bit fra instruktion
+  aluDecoder.io.funct7 := id_ex.funct7  // 7-bit fra instruktion
 
   // ALU Connections
-  alu.io.alu_op := id_ex.aluOp
+  alu.io.alu_op := aluDecoder.io.op
   alu.io.alu_a  := forwardA_data
   alu.io.alu_b  := Mux(id_ex.aluSrc, id_ex.imm, forwardB_data)
 
   // Branch Logic (Resolved in EX stage)
-  val branch_taken = id_ex.branch && !alu.io.less_signed
+  // Vi bruger funct3 til at vælge præcis hvilket flag (Zero, Less, etc.) vi skal reagere på
+  val branchConditionMet = MuxLookup(id_ex.funct3, false.B)(Seq(
+    "b000".U -> alu.io.zero,         // BEQ
+    "b001".U -> !alu.io.zero,        // BNE
+    "b100".U -> alu.io.less_signed,  // BLT
+    "b101".U -> !alu.io.less_signed, // BGE
+    "b110".U -> alu.io.less_unsigned,// BLTU
+    "b111".U -> !alu.io.less_unsigned// BGEU
+  ))
+
+  val branch_taken = id_ex.branch && branchConditionMet
   
   // Update Fetch Unit
   fetch.io.branch_taken   := branch_taken

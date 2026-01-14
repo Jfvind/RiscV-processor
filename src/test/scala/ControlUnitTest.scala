@@ -3,7 +3,7 @@ package core
 import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
-import core.ALUConstants._
+import core.ControlConstants._
 
 class ControlUnitTest extends AnyFlatSpec with ChiselScalatestTester {
   behavior of "ControlUnit"
@@ -23,6 +23,7 @@ class ControlUnitTest extends AnyFlatSpec with ChiselScalatestTester {
       dut.io.regWrite.expect(false.B) // Må IKKE skrive til register
       dut.io.branch.expect(false.B)   // Er ikke en branch
       dut.io.aluSrc.expect(true.B)    // Skal bruge immediate til adresse beregning
+      dut.io.aluOp.expect(ALU_OP_MEM)
     }
   }
 
@@ -36,7 +37,7 @@ class ControlUnitTest extends AnyFlatSpec with ChiselScalatestTester {
       dut.io.branch.expect(true.B)    // SKAL være true
       dut.io.memWrite.expect(false.B) // Må ikke skrive til ram
       dut.io.regWrite.expect(false.B) // Må ikke skrive til register
-      dut.io.aluOp.expect(ALU_SLT)    // Skal bruge SLT til at sammenligne
+      dut.io.aluOp.expect(ALU_OP_BRANCH)    // Branch IKKE SLT
     }
   }
 }

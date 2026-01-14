@@ -3,6 +3,7 @@ import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
 import core.Core
 
+
 class CoreTest extends AnyFlatSpec with ChiselScalatestTester {
 
   "Pipelined Core" should "handle hazards and UART output correctly" in {
