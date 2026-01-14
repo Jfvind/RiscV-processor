@@ -52,10 +52,6 @@ class ALU extends Module {
   val adder_result = adder_full(31,0) // Lower 32 bits are the actual result
   val carry_out = adder_full(32)      // 33rd bit is the Carry-Out / Overflow from addition
 
-  //================ 2. ZERO FLAG ==========================================================
-  // Output true if the result is exactly 0. Used for BEQ/BNE branches.
-  io.zero := (adder_result === 0.U)
-
 
   // =============== 2. COMPARISON UNIT (SLT, SLTU) ===================================
 
@@ -90,4 +86,8 @@ class ALU extends Module {
     ALU_SLTU -> io.less_unsigned.asUInt,  // Free due to carry
     ALU_LUI  -> io.alu_b
   ))
+
+  //================  ZERO FLAG ==========================================================
+  // Output true if the result is exactly 0. Used for BEQ/BNE branches.
+  io.zero := (adder_result === 0.U)
 }
