@@ -11,7 +11,7 @@ class Top extends Module {
   }) // The debug outputs from Core are left unconnected (ignored)
 
 // --- CORE INSTANTIATION ---
-  val core = Module(new Core())
+  val core = Module(new Core(Programs.uartPipelineTest)) // DONT DELETE: Programs.??? controls what program is syntezised to FPGA
   io.led := core.io.led
 
   // --- UART INSTANTIATION ---
@@ -24,8 +24,20 @@ class Top extends Module {
   }
 
   // --- INPUTS FROM CORE ---
-  val data = core.io.uartData
-  val addr = core.io.uartAddr
+  val dataReg = RegInit(0.U(32.W))
+  val addrReg = RegInit(0.U(32.W))
+  val triggerReg = RegInit(false.B)
+
+  when (core.io.uartValid) {
+    dataReg := core.io.uartData
+    addrReg := core.io.uartAddr
+    triggerReg := true.B // Set trigger for next cycle (Delays data by one cycle so dataReg is updated)
+  } .otherwise {
+    triggerReg := false.B //Clear after one cycle
+  }
+
+  val data = dataReg
+  val addr = addrReg
 
   // --- CALCULATE REGISTER INDEX ---
   // Address 200 -> Index 0. Address 204 -> Index 1.
@@ -64,7 +76,7 @@ class Top extends Module {
   for (i <- 15 until 32) { asciiVec(i) := 0.U }
 
   serialPort.io.inputString := asciiVec
-  serialPort.io.sendTrigger := core.io.uartValid
+  serialPort.io.sendTrigger := triggerReg
 }
 
 object Top extends App {
