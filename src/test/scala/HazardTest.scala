@@ -190,7 +190,7 @@ class HazardTest extends AnyFlatSpec with ChiselScalatestTester {
       // ALU computes SLT: 0 < 10 = 1 (true), so branch NOT taken
       c.io.alu_res.expect(1.U, "BGE: 0 < 10 = true, branch should NOT be taken")
       println("✓ Cycle 4: Branch condition evaluated (not taken)")
-      c.clock.step(1)
+      c.clock.step(2)
       
       // Cycle 5: Next instruction (addi x2, x0, 20) should execute normally
       c.io.alu_res.expect(20.U, "x2 should be 20 (instruction not flushed)")

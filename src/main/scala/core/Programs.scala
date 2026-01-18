@@ -14,8 +14,10 @@ object Programs {
     "h00a00093".U(32.W), // 4: addi x1, x0, 10
     // x2 = x1 + 5 = 15 (0xF). 
     // x1 is in EX stage when this fetches. Must forward from EX.
-    //"h00508113".U(32.W), // 8: addi x2, x1, 5 (x2 = F)
-    "hFBB08113".U(32.W), // (x2 = 5)
+    "h00508113".U(32.W), // 8: addi x2, x1, 5 (x2 = 0xF)
+    //"h0E608113".U(32.W), // (x2 = 0xF0)
+    //"hFBB08113".U(32.W), // (x2 = 0x5)
+    //"h31608113".U(32.W), // (x2 = 0x320)
 
     // 3. Test MEM Forwarding (Data Hazard)
     // x4 = 20
@@ -29,6 +31,7 @@ object Programs {
     // 4. Test UART Output
     // Write x2 (15) to UART Address for "x2" (200 + 2*4 = 208)
     "h0021a423".U(32.W), // 24: sw x2, 8(x3)
+    //"h0021a823".U(32.W), // sw x4, 16(x3)
 
     // 5. Test Branch Flushing (Control Hazard)
     // We use BGE x0, x0, 8. 
@@ -116,6 +119,3 @@ object Programs {
     "h00000013".U(32.W)  // 36: nop
   )
 }
-
-
-

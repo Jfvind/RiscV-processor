@@ -13,9 +13,10 @@ class Core(program: Seq[UInt]) extends Module {
     val led         = Output(UInt(1.W))
 
     // Uart
-    val uartData    = Output(UInt(32.W))
+    /*val uartData    = Output(UInt(32.W))
     val uartAddr    = Output(UInt(32.W))
-    val uartValid   = Output(Bool())
+    val uartValid   = Output(Bool())*/
+    val tx          = Output(Bool())
   })
 
   // Instantiate Modules
@@ -26,6 +27,7 @@ class Core(program: Seq[UInt]) extends Module {
   val memIO      = Module(new MemoryMapping()) // Decides RAM or LED (Contains DataMemory)
   val forwarding = Module(new ForwardingUnit())
   val hazard     = Module(new HazardUnit())
+  val serialPort = Module(new Serialport())
 
   // ==============================================================================
   // IF STAGE (Instruction Fetch)
@@ -64,6 +66,7 @@ class Core(program: Seq[UInt]) extends Module {
     val rs1_addr = UInt(5.W)
     val rs2_addr = UInt(5.W)
     val rd_addr  = UInt(5.W)
+    val tx       = Bool()
     // Control Signals
     val regWrite = Bool()
     val memWrite = Bool()
@@ -86,6 +89,7 @@ class Core(program: Seq[UInt]) extends Module {
     id_ex.rs1_addr := if_id_instr(19, 15)
     id_ex.rs2_addr := if_id_instr(24, 20)
     id_ex.rd_addr  := if_id_instr(11, 7)
+    id_ex.tx       := serialPort.io.tx
     // Control Signals
     id_ex.regWrite := decode.io.regWrite
     id_ex.memWrite := decode.io.memWrite
@@ -107,6 +111,7 @@ class Core(program: Seq[UInt]) extends Module {
     val rd_addr    = UInt(5.W)
     val regWrite   = Bool()
     val memWrite   = Bool()
+    val tx         = Bool()
   }
   val ex_mem = RegInit(0.U.asTypeOf(new EX_MEM_Bundle))
 
@@ -176,10 +181,97 @@ class Core(program: Seq[UInt]) extends Module {
   ex_mem.rd_addr    := id_ex.rd_addr
   ex_mem.regWrite   := id_ex.regWrite
   ex_mem.memWrite   := id_ex.memWrite
+  ex_mem.tx         := id_ex.tx
 
   // ==============================================================================
   // MEM STAGE (Memory Access)
   // ==============================================================================
+
+  // ======== UART START ========
+  // --- HELPER: 4-bit Hex to ASCII ---
+  def nibbleToChar(nibble: UInt): UInt = {
+    Mux(nibble < 10.U, nibble + 48.U, nibble + 55.U)
+  }
+  // --- HELPER: division by 10 and modulo 10 ---
+  def div10(n: UInt): (UInt, UInt) = {
+    val w = n.getWidth
+    require(w > 0)
+    val k = w + 3
+    val M = (((1 << k) + 9) / 10) // computed in Scala at elaboration time
+    val q  = (n * M.U) >> k       // quotient = n / 10
+    val r  = n - q * 10.U         // remainder = n % 10
+    (q, r)
+  }
+
+  // --- INPUTS FROM CORE ---
+  val dataReg = RegInit(0.U(32.W))
+  val addrReg = RegInit(0.U(32.W))
+  val triggerReg = RegInit(false.B)
+
+  when (memIO.io.uartValid) {
+    //dataReg := io.uartData
+    //addrReg := io.uartAddr
+    dataReg := ex_mem.rs2_data
+    addrReg := ex_mem.alu_result
+    triggerReg := true.B // Set trigger for next cycle (Delays data by one cycle so dataReg is updated)
+  } .otherwise {
+    triggerReg := false.B //Clear after one cycle
+  }
+
+  //val data = dataReg
+  //val addr = addrReg
+
+  // --- CALCULATE REGISTER INDEX ---
+  // Address 200 -> Index 0. Address 204 -> Index 1.
+  // Formula: (Address - 200) / 4
+  val regIndex = (addrReg - 200.U) >> 2
+
+  // Split Index into Two Decimal Digits (e.g., 31 -> '3', '1')
+  // Since we only go up to 31, we can use simple logic
+  //val tens = regIndex / 10.U
+  //val ones = regIndex % 10.U
+  val (tens, ones) = div10(regIndex)
+
+  // --- CONSTRUCT STRING ---
+  // Format: "x00: 00000000\r\n"
+  val asciiVec = Reg(Vec(32, UInt(8.W)))
+
+  asciiVec(0) := 'x'.U
+  asciiVec(1) := nibbleToChar(tens) // Reusing nibbleToChar works for 0-3
+  asciiVec(2) := nibbleToChar(ones) // Reusing nibbleToChar works for 0-9
+  asciiVec(3) := ':'.U
+  asciiVec(4) := ' '.U
+
+  // Standard Hex Data (8 chars)
+  asciiVec(5)  := nibbleToChar(dataReg(31, 28))
+  asciiVec(6)  := nibbleToChar(dataReg(27, 24))
+  asciiVec(7)  := nibbleToChar(dataReg(23, 20))
+  asciiVec(8)  := nibbleToChar(dataReg(19, 16))
+  asciiVec(9)  := nibbleToChar(dataReg(15, 12))
+  asciiVec(10) := nibbleToChar(dataReg(11, 8))
+  asciiVec(11) := nibbleToChar(dataReg(7, 4))
+  asciiVec(12) := nibbleToChar(dataReg(3, 0))
+  
+  /*asciiVec(5) := 'A'.U
+  asciiVec(6) := 'B'.U
+  asciiVec(7) := 'C'.U
+  asciiVec(8) := 'D'.U
+  asciiVec(9) := 'E'.U
+  asciiVec(10) := 'F'.U
+  //asciiVec(11) := 'G'.U
+  //asciiVec(12) := 70.U*/
+
+  asciiVec(13) := '\r'.U
+  asciiVec(14) := '\n'.U
+  
+  // Padding
+  for (i <- 15 until 32) { asciiVec(i) := 0.U }
+
+  serialPort.io.inputString := asciiVec
+  serialPort.io.sendTrigger := triggerReg
+  io.tx                     := ex_mem.tx
+  // ======== UART END ========
+
 
   memIO.io.address   := ex_mem.alu_result
   memIO.io.writeData := ex_mem.rs2_data
@@ -206,7 +298,7 @@ class Core(program: Seq[UInt]) extends Module {
   io.alu_res     := ex_mem.alu_result
 
   io.led         := memIO.io.led
-  io.uartData    := memIO.io.uartData
+  /*io.uartData    := memIO.io.uartData
   io.uartAddr    := memIO.io.uartAddr
-  io.uartValid   := memIO.io.uartValid
+  io.uartValid   := memIO.io.uartValid*/
 }

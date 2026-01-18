@@ -106,13 +106,14 @@ class PipelineIntegrationTest extends AnyFlatSpec with ChiselScalatestTester {
         println("✓ S-type (sw) executed: stored 30 to UART addr 208")
         uartSeen = true
       }
-      c.clock.step(1)
       
       if (!uartSeen && c.io.uartValid.peek().litToBoolean) {
         c.io.uartAddr.expect(208.U)
         c.io.uartData.expect(30.U)
         println("✓ S-type (sw) executed: stored 30 to UART addr 208")
       }
+
+      c.clock.step(1)
       
       // Branch should not be taken (0 < 10 is true, so !(0 < 10) = false)
       c.io.alu_res.expect(1.U, "B-type: 0 < 10 = true (branch not taken)")
