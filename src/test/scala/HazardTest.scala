@@ -45,6 +45,7 @@ class HazardTest extends AnyFlatSpec with ChiselScalatestTester {
       // ALU should compute 10 + 5 = 15
       c.io.alu_res.expect(15.U, "x2 should be 15 via EX-to-EX forwarding")
       println("✓ Cycle 4: x2 = 15 (forwarded from MEM stage)")
+
       
       println("✓ TEST 1 PASSED: EX-to-EX forwarding works correctly\n")
     }
@@ -172,7 +173,7 @@ class HazardTest extends AnyFlatSpec with ChiselScalatestTester {
   "Pipeline" should "not flush pipeline when branch is not taken" in {
     val program = Seq(
       "h00a00093".U(32.W), // 0:  addi x1, x0, 10      // x1 = 10
-      "h00104463".U(32.W), // 4:  bge  x0, x1, 8       // Branch if 0 >= 10 (FALSE)
+      "h00105263".U(32.W), // 4:  bge  x0, x1, 8       // Branch if 0 >= 10 (FALSE)
       "h01400113".U(32.W), // 8:  addi x2, x0, 20      // Should NOT be flushed
       "h00000013".U(32.W), // 12: nop
       "h00000013".U(32.W)  // 16: nop
@@ -180,22 +181,22 @@ class HazardTest extends AnyFlatSpec with ChiselScalatestTester {
     
     test(new Core(program)).withAnnotations(Seq(WriteVcdAnnotation)) { c =>
       println("\n=== TEST 5: Branch Not Taken ===")
-      
+
       c.clock.step(3)
       c.io.alu_res.expect(10.U, "x1 = 10")
       println("✓ Cycle 3: x1 = 10")
       c.clock.step(1)
-      
+
       // Cycle 4: BGE in EX, evaluates 0 >= 10 (false)
       // ALU computes SLT: 0 < 10 = 1 (true), so branch NOT taken
       c.io.alu_res.expect(1.U, "BGE: 0 < 10 = true, branch should NOT be taken")
       println("✓ Cycle 4: Branch condition evaluated (not taken)")
-      c.clock.step(2)
-      
+      c.clock.step(1)
+
       // Cycle 5: Next instruction (addi x2, x0, 20) should execute normally
       c.io.alu_res.expect(20.U, "x2 should be 20 (instruction not flushed)")
       println("✓ Cycle 5: Sequential instruction executed (x2 = 20)")
-      
+
       println("✓ TEST 5 PASSED: Branch not taken works correctly\n")
     }
   }

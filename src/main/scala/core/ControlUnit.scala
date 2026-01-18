@@ -22,6 +22,8 @@ class ControlUnit extends Module {
     val imm         = Output(UInt(32.W))  // The extracted immediate from the instruction, now extended to 32 bits via sign extension.
     val memWrite    = Output(Bool())      // Write enable for our data memory (RAM)
     val branch      = Output(Bool())      // Indicates a branch instruction --> Fetch-state (for PC logic). Combined with ALU result to decide if we jump.
+    val memToReg    = Output(Bool())  // For Load instructions to select data from memory to write to register
+
   })
 
   // ============================================
@@ -41,6 +43,7 @@ class ControlUnit extends Module {
   io.aluOp    := ALU_OP_MEM
   io.memWrite := false.B
   io.branch   := false.B
+  io.memToReg := false.B
 
   io.imm      := immGen.io.imm_i
 
@@ -50,6 +53,7 @@ class ControlUnit extends Module {
       io.aluOp    := ALU_OP_RTYPE // Fortæl ALUDecoder at det er R-type
       io.regWrite := true.B
       io.aluSrc   := false.B      // Brug Register (rs2) som input B
+      io.memToReg := false.B
     }
 
     // 2. I-Type Arithmetic (addi, etc.)
@@ -57,6 +61,7 @@ class ControlUnit extends Module {
       io.aluOp    := ALU_OP_ITYPE // ALUDecode
       io.regWrite := true.B
       io.aluSrc   := true.B       // Brug Immediate som input B
+      io.memToReg := false.B
       io.imm      := immGen.io.imm_i
     }
 
@@ -65,6 +70,7 @@ class ControlUnit extends Module {
       io.aluOp    := ALU_OP_MEM   // Vi skal lægge sammen (Base + Offset)
       io.regWrite := true.B       // Vi skriver data fra memory til register
       io.aluSrc   := true.B       // Adresse offset er immediate
+      io.memToReg := true.B       //Mem not ALU
       io.imm      := immGen.io.imm_i
       //Memread
     }
@@ -75,6 +81,7 @@ class ControlUnit extends Module {
       io.memWrite := true.B
       io.aluSrc   := true.B       // Adresse offset er immediate
       io.regWrite := false.B      // Stores returnerer ikke noget til register
+      io.memToReg := false.B
       io.imm      := immGen.io.imm_s
     }
 
@@ -84,6 +91,7 @@ class ControlUnit extends Module {
       io.branch   := true.B
       io.aluSrc   := false.B       // Branches sammenligner Reg vs Reg
       io.regWrite := false.B
+      io.memToReg := false.B
       io.imm      := immGen.io.imm_b
     }
 
@@ -92,6 +100,7 @@ class ControlUnit extends Module {
       io.aluOp    := ALU_OP_MEM
       io.regWrite := true.B
       io.aluSrc   := true.B
+      io.memToReg := false.B
       io.imm      := immGen.io.imm_u
     }
   }
