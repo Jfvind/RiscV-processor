@@ -11,11 +11,12 @@ class Core(program: Seq[UInt]) extends Module {
     val instruction = Output(UInt(32.W)) // Helpful to see what we fetched
     val alu_res     = Output(UInt(32.W))
     val led         = Output(UInt(1.W))
-
-    // Uart
-    /*val uartData    = Output(UInt(32.W))
+    // Uart debug
+    val uartData    = Output(UInt(8.W))
     val uartAddr    = Output(UInt(32.W))
-    val uartValid   = Output(Bool())*/
+    val uartValid   = Output(Bool())
+
+    // Uart prod
     val tx          = Output(Bool())
   })
 
@@ -204,7 +205,11 @@ class Core(program: Seq[UInt]) extends Module {
   // ======== UART START ========
   // --- HELPER: 4-bit Hex to ASCII ---
   def nibbleToChar(nibble: UInt): UInt = {
-    Mux(nibble < 10.U, nibble + 48.U, nibble + 55.U)
+    val n = (nibble & 0xf.U)(3, 0)
+    val tmp = Mux(n < 10.U(4.W), n + 48.U(8.W), n + 55.U(8.W))
+    val char = WireDefault(0.U(8.W)) // cast to 8 bit wide for uart
+    char := tmp
+    char
   }
   // --- HELPER: division by 10 and modulo 10 ---
   def div10(n: UInt): (UInt, UInt) = {
@@ -223,8 +228,6 @@ class Core(program: Seq[UInt]) extends Module {
   val triggerReg = RegInit(false.B)
 
   when (memIO.io.uartValid) {
-    //dataReg := io.uartData
-    //addrReg := io.uartAddr
     dataReg := ex_mem.rs2_data
     addrReg := ex_mem.alu_result
     triggerReg := true.B // Set trigger for next cycle (Delays data by one cycle so dataReg is updated)
@@ -232,18 +235,12 @@ class Core(program: Seq[UInt]) extends Module {
     triggerReg := false.B //Clear after one cycle
   }
 
-  //val data = dataReg
-  //val addr = addrReg
-
   // --- CALCULATE REGISTER INDEX ---
   // Address 200 -> Index 0. Address 204 -> Index 1.
   // Formula: (Address - 200) / 4
   val regIndex = (addrReg - 200.U) >> 2
 
   // Split Index into Two Decimal Digits (e.g., 31 -> '3', '1')
-  // Since we only go up to 31, we can use simple logic
-  //val tens = regIndex / 10.U
-  //val ones = regIndex % 10.U
   val (tens, ones) = div10(regIndex)
 
   // --- CONSTRUCT STRING ---
@@ -265,15 +262,6 @@ class Core(program: Seq[UInt]) extends Module {
   asciiVec(10) := nibbleToChar(dataReg(11, 8))
   asciiVec(11) := nibbleToChar(dataReg(7, 4))
   asciiVec(12) := nibbleToChar(dataReg(3, 0))
-  
-  /*asciiVec(5) := 'A'.U
-  asciiVec(6) := 'B'.U
-  asciiVec(7) := 'C'.U
-  asciiVec(8) := 'D'.U
-  asciiVec(9) := 'E'.U
-  asciiVec(10) := 'F'.U
-  //asciiVec(11) := 'G'.U
-  //asciiVec(12) := 70.U*/
 
   asciiVec(13) := '\r'.U
   asciiVec(14) := '\n'.U
@@ -315,7 +303,7 @@ class Core(program: Seq[UInt]) extends Module {
   io.alu_res     := ex_mem.alu_result
 
   io.led         := memIO.io.led
-  /*io.uartData    := memIO.io.uartData
+  io.uartData    := memIO.io.uartData
   io.uartAddr    := memIO.io.uartAddr
-  io.uartValid   := memIO.io.uartValid*/
+  io.uartValid   := memIO.io.uartValid
 }

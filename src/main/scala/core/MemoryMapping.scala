@@ -13,9 +13,11 @@ class MemoryMapping extends Module {
     val readData  = Output(UInt(32.W)) // Read data from RAM
     val led       = Output(UInt(1.W))  // State of LED for FPGA
 
-    // UART
-    //val uartData  = Output(UInt(32.W))
-    //val uartAddr  = Output(UInt(32.W))
+    // UART debug
+    val uartData  = Output(UInt(32.W))
+    val uartAddr  = Output(UInt(32.W))
+
+    // Uart prod
     val uartValid = Output(Bool())
   })
 
@@ -43,6 +45,6 @@ class MemoryMapping extends Module {
 
   // --- UART LOGIC ---
   io.uartValid := io.memWrite && isUart
-  //io.uartAddr  := io.address
-  //io.uartData  := io.writeData
+  io.uartAddr  := io.address
+  io.uartData  := io.writeData
 }

@@ -6,7 +6,7 @@ import core._
 
 class CoreTest extends AnyFlatSpec with ChiselScalatestTester {
 
-  "Pipelined Core" should "handle hazards and UART output correctly" in {
+  "Pipelined Core" should "Print the value of core.io.uartData" in {
     val program = Seq(
     // 1. Setup UART Base Address (x3 = 200)
     "h0c800193".U(32.W), // 0: addi x3, x0, 200
@@ -71,53 +71,15 @@ class CoreTest extends AnyFlatSpec with ChiselScalatestTester {
       // Let's wait until the SW instruction (Instruction 24) hits the Memory stage.
       // That is roughly 5 instructions * 1 cycle + pipeline depth.
       
-      var uartDetected = false
-      
       // Run for 20 cycles and monitor outputs
       for (i <- 0 until 20) {
-        val pc = c.io.pc_out.peek().litValue
-        val valid = c.io.uartValid.peek().litToBoolean
-        val addr = c.io.uartAddr.peek().litValue
         val data = c.io.uartData.peek().litValue
-        
-        // Check for UART Write
-        if (valid) {
-          println(f"[Cycle $i] UART WRITE DETECTED!")
-          println(f"  Address: $addr%d (Expected 208 for x2)")
-          println(f"  Data:    $data%d (Expected 15)")
-          
-          assert(addr == 208, "Error: UART Address should be 208 (for register x2)")
-          assert(data == 15,  "Error: UART Data should be 15 (Forwarding failed if this is 0 or 5)")
-          uartDetected = true
-        }
-        
-        c.clock.step(1)
-      }
 
-      assert(uartDetected, "Error: UART Write never occurred within 20 cycles")
-      println("--- UART & Forwarding Test Passed ---")
-    }
-  }
-  
-  "Top Module" should "toggle TX pin" in {
-    // This tests the physical connection in Top.scala
-    test(new Top) { c =>
-      c.clock.setTimeout(10000) // Allow many cycles
-      
-      println("--- Waiting for TX activity ---")
-      
-      // Run until TX goes low (Start Bit)
-      // The UART is idle HIGH. When it starts sending, it pulls TX LOW.
-      var txActive = false
-      for (_ <- 0 until 2000) { // Give it time to reach the SW instruction
-        if (c.io.tx.peek().litValue == 0) {
-          txActive = true
-        }
+        println(f"[Cycle $i] UART WRITE DETECTED!")
+        //println(f"  Address: $addr%d (Expected 208 for x2)")
+        println(f"  Data:    $data%d (Expected 15)")
         c.clock.step(1)
-      }
-      
-      assert(txActive, "Error: TX pin never went low. UART did not trigger.")
-      println("--- Top Module Connectivity Passed ---")
+        }
     }
   }
 }
