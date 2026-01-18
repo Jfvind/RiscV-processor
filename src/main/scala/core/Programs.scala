@@ -161,4 +161,19 @@ object Programs {
     "h00000013".U(32.W), // 28: nop
     "h00000013".U(32.W), // 32: nop
   )
+  // Program 6: JAL Test
+  val jalTest = Seq(
+    // Test 1: Simple JAL forward
+    "h00c000ef".U(32.W), //  0: jal x1, 12        (x1 = PC+4 = 4, jump to PC+12 = 12)
+    "h00100113".U(32.W), //  4: addi x2, x0, 1    (SKIPPED - should not execute)
+    "h00200193".U(32.W), //  8: addi x3, x0, 2    (SKIPPED - should not execute)
+    "h00a00213".U(32.W), // 12: addi x4, x0, 10   (TARGET - x4 = 10)
+
+    // Test 2: Verify return address
+    "h00108293".U(32.W), // 16: addi x5, x1, 1    (x5 = x1 + 1 = 4 + 1 = 5)
+
+    // End
+    "h00000013".U(32.W), // 20: nop
+    "h00000013".U(32.W), // 24: nop
+  )
 }

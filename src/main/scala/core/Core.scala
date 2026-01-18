@@ -80,6 +80,7 @@ class Core(program: Seq[UInt]) extends Module {
     val funct3   = UInt(3.W)
     val funct7   = UInt(7.W)
     val memToReg = Bool()
+    val jump     = Bool()
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
@@ -104,6 +105,7 @@ class Core(program: Seq[UInt]) extends Module {
     id_ex.funct3   := if_id_instr(14, 12)
     id_ex.funct7   := if_id_instr(31, 25)
     id_ex.memToReg := decode.io.memToReg
+    id_ex.jump     := decode.io.jump
   }
 
   // ==============================================================================
@@ -119,6 +121,8 @@ class Core(program: Seq[UInt]) extends Module {
     val memWrite   = Bool()
     val tx         = Bool()
     val memToReg   = Bool()
+    val pc_plus_4  = UInt(32.W)
+    val jump       = Bool()
   }
   val ex_mem = RegInit(0.U.asTypeOf(new EX_MEM_Bundle))
 
@@ -174,14 +178,22 @@ class Core(program: Seq[UInt]) extends Module {
   ))
 
   val branch_taken = id_ex.branch && branchConditionMet
-  
+  val jump_taken = id_ex.jump
+
+  // Combined: branch OR jump causes PC to change
+  val pc_change = branch_taken || jump_taken
+
+  // Jump target (same calculation for both branch and JAL)
+  val jump_target = id_ex.pc + id_ex.imm
+
+
   // Update Fetch Unit
-  fetch.io.branch_taken   := branch_taken
-  fetch.io.jump_target_pc := id_ex.pc + id_ex.imm
+  fetch.io.branch_taken   := pc_change
+  fetch.io.jump_target_pc := jump_target
   fetch.io.stall          := hazard.io.stall
 
   // Update Hazard Unit
-  hazard.io.branch_taken := branch_taken
+  hazard.io.branch_taken := pc_change
 
   // Load-Use Hazard Detection signals:
   hazard.io.id_ex_memToReg   := id_ex.memToReg
@@ -197,6 +209,8 @@ class Core(program: Seq[UInt]) extends Module {
   ex_mem.memWrite   := id_ex.memWrite
   ex_mem.tx         := id_ex.tx
   ex_mem.memToReg   := id_ex.memToReg
+  ex_mem.pc_plus_4  := id_ex.pc + 4.U
+  ex_mem.jump       := id_ex.jump
 
   // ==============================================================================
   // MEM STAGE (Memory Access)
@@ -282,8 +296,16 @@ class Core(program: Seq[UInt]) extends Module {
   // Read data from memory
   val memReadData = memIO.io.readData
 
+  // Select writeback data:
+  // Priority: Jump (PC+4) > Memory > ALU result
+  val wb_data = MuxCase(ex_mem.alu_result, Seq(
+    ex_mem.jump      -> ex_mem.pc_plus_4,  // JAL/JALR: write PC+4
+    ex_mem.memToReg  -> memReadData         // Load: write memory data
+  ))
+
+
   // Update MEM/WB Register
-  mem_wb.result   := Mux(ex_mem.memToReg, memReadData, ex_mem.alu_result)
+  mem_wb.result   := wb_data
   mem_wb.rd_addr  := ex_mem.rd_addr
   mem_wb.regWrite := ex_mem.regWrite
 
