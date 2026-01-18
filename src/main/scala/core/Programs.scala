@@ -115,6 +115,49 @@ object Programs {
     "h00000013".U(32.W), // 32: nop
     "h00000013".U(32.W)  // 36: nop
   )
+  // Program 4: Load Instruction Test
+  val loadTest = Seq(
+    // Test 1: Simple Load/Store
+    "h06400093".U(32.W), //  0: addi x1, x0, 100    (x1 = 100)
+    "h0010a023".U(32.W), //  4: sw   x1, 0(x1)      (Store 100 to addr 100)
+    "h06402083".U(32.W), //  8: lw   x1, 100(x0)    (Load from addr 100 → x1 = 100)
+
+    // Test 2: Load into different register
+    "h06402103".U(32.W), // 12: lw   x2, 100(x0)    (x2 = 100)
+
+    // Test 3: Load with offset
+    "h01e00193".U(32.W), // 16: addi x3, x0, 30     (x3 = 30)
+    "h0031a223".U(32.W), // 20: sw   x3, 4(x3)      (Store 30 to addr 34)
+    "h00418203".U(32.W), // 24: lw   x4, 4(x3)      (Load from addr 34 → x4 = 30)
+
+    // End
+    "h00000013".U(32.W), // 28: nop
+    "h00000013".U(32.W), // 32: nop
+    "h00000013".U(32.W)  // 36: nop
+  )
+
+  // Program 5: Load-Use Hazard Test
+  val loadUseHazardTest = Seq(
+    // Setup: Store value to memory
+    "h06400093".U(32.W), //  0: addi x1, x0, 100    (x1 = 100)
+    "h0640a023".U(32.W), //  4: sw   x1, 0(x1)      (Store 100 to addr 100)
+
+    // CRITICAL TEST: Load-Use Hazard
+    // The 'add' immediately uses x2, which is being loaded
+    // This REQUIRES a 1-cycle stall
+    "h06402103".U(32.W), //  8: lw   x2, 100(x0)    (Load: x2 = 100)
+    "h002081b3".U(32.W), // 12: add  x3, x1, x2    (Use: x3 = x1 + x2 = 200)
+    //                                               ^ HAZARD! x2 not ready yet
+
+    // Another test: No hazard (NOP between load and use)
+    "h06402203".U(32.W), // 16: lw   x4, 100(x0)    (Load: x4 = 100)
+    "h00000013".U(32.W), // 20: nop                (Bubble - no hazard)
+    "h004082b3".U(32.W), // 24: add  x5, x1, x4    (Use: x5 = 200, no stall needed)
+
+    // End
+    "h00000013".U(32.W), // 28: nop
+    "h00000013".U(32.W), // 32: nop
+  )
 }
 
 

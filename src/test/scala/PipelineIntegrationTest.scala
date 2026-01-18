@@ -69,35 +69,35 @@ class PipelineIntegrationTest extends AnyFlatSpec with ChiselScalatestTester {
       "h002081b3".U(32.W), // 8:  add  x3, x1, x2      // R-type (10 + 20 = 30)
       "h0c800213".U(32.W), // 12: addi x4, x0, 200     // I-type
       "h00322423".U(32.W), // 16: sw   x3, 8(x4)       // S-type (store 30 to addr 208)
-      "h00104463".U(32.W), // 20: bge  x0, x1, 8       // B-type (should not branch: 0 >= 10 is false)
+      "h00105263".U(32.W), // 20: bge  x0, x1, 8       // B-type (should not branch: 0 >= 10 is false)
       "h03200293".U(32.W), // 24: addi x5, x0, 50      // Should execute
       "h00000013".U(32.W)  // 28: nop
     )
-    
+
     test(new Core(program)).withAnnotations(Seq(WriteVcdAnnotation)) { c =>
       println("\n=== TEST 2: Mixed Instruction Types ===")
-      
+
       // Track instruction execution through pipeline
       c.clock.step(3)
       c.io.alu_res.expect(10.U, "I-type: x1 = 10")
       println("✓ I-type (addi) executed: x1 = 10")
       c.clock.step(1)
-      
+
       c.io.alu_res.expect(20.U, "I-type: x2 = 20")
       println("✓ I-type (addi) executed: x2 = 20")
       c.clock.step(1)
-      
+
       c.io.alu_res.expect(30.U, "R-type: x3 = x1 + x2 = 30")
       println("✓ R-type (add) executed: x3 = 30")
       c.clock.step(1)
-      
+
       c.io.alu_res.expect(200.U, "I-type: x4 = 200")
       println("✓ I-type (addi) executed: x4 = 200")
       c.clock.step(1)
-      
+
       c.io.alu_res.expect(208.U, "S-type: address = 200 + 8 = 208")
       println("✓ S-type (sw) address calculated: 208")
-      
+
       // Check UART output for the store
       var uartSeen = false
       if (c.io.uartValid.peek().litToBoolean) {
@@ -107,21 +107,21 @@ class PipelineIntegrationTest extends AnyFlatSpec with ChiselScalatestTester {
         uartSeen = true
       }
       c.clock.step(1)
-      
+
       if (!uartSeen && c.io.uartValid.peek().litToBoolean) {
         c.io.uartAddr.expect(208.U)
         c.io.uartData.expect(30.U)
         println("✓ S-type (sw) executed: stored 30 to UART addr 208")
       }
-      
+
       // Branch should not be taken (0 < 10 is true, so !(0 < 10) = false)
       c.io.alu_res.expect(1.U, "B-type: 0 < 10 = true (branch not taken)")
       println("✓ B-type (bge) executed: branch not taken")
       c.clock.step(1)
-      
+
       c.io.alu_res.expect(50.U, "Next instruction executed: x5 = 50")
       println("✓ Sequential instruction executed: x5 = 50")
-      
+
       println("✓ TEST 2 PASSED: Mixed instruction types handled correctly\n")
     }
   }

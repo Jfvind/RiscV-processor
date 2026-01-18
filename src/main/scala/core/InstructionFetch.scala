@@ -10,6 +10,7 @@ class InstructionFetch(program: Seq[UInt]) extends Module {
     // Inputs from the Control Unit / ALU
     val jump_target_pc = Input(UInt(32.W))  // The address to jump/branch to
     val branch_taken      = Input(Bool())   // 0 = PC+4, 1 = Jump Target
+    val stall          = Input(Bool())
 
     // Outputs to the Decode Stage
     val pc             = Output(UInt(32.W)) // Current PC (needed for jumps)
@@ -28,7 +29,7 @@ class InstructionFetch(program: Seq[UInt]) extends Module {
   }
   
   // PC update logic
-  when(!halted) {
+  when(!halted && !io.stall) {
     // If branch_taken is true, we jump. Otherwise, we move to the next instruction (PC + 4).
     val next_pc = Mux(io.branch_taken, io.jump_target_pc, pc + 4.U)
     pc := next_pc

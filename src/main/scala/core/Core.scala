@@ -38,11 +38,14 @@ class Core(program: Seq[UInt]) extends Module {
   // Update IF/ID Register
   when(hazard.io.flush) {
     if_id_pc    := 0.U
-    if_id_instr := 0.U // Flush to NOP
-  } .otherwise {
+    if_id_instr := 0x00000013.U//NOP
+  }.elsewhen(!hazard.io.stall) {
+    // Only update if NOT stalling
     if_id_pc    := fetch.io.pc
     if_id_instr := fetch.io.instruction
   }
+  // If stalling, if_id registers keep their current values (no assignment)
+
 
   // ==============================================================================
   // ID STAGE (Instruction Decode)
@@ -72,12 +75,13 @@ class Core(program: Seq[UInt]) extends Module {
     val aluOp    = UInt(4.W)
     val funct3   = UInt(3.W)
     val funct7   = UInt(7.W)
+    val memToReg = Bool()
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
   // Update ID/EX Register
-  when(hazard.io.flush) {
-    id_ex := 0.U.asTypeOf(new ID_EX_Bundle) // Flush Control Signals
+  when(hazard.io.flush || hazard.io.stall) {
+    id_ex := 0.U.asTypeOf(new ID_EX_Bundle)
   } .otherwise {
     id_ex.pc       := if_id_pc
     id_ex.rs1_data := regFile.io.rs1_data
@@ -94,6 +98,7 @@ class Core(program: Seq[UInt]) extends Module {
     id_ex.aluOp    := decode.io.aluOp
     id_ex.funct3   := if_id_instr(14, 12)
     id_ex.funct7   := if_id_instr(31, 25)
+    id_ex.memToReg := decode.io.memToReg
   }
 
   // ==============================================================================
@@ -107,6 +112,7 @@ class Core(program: Seq[UInt]) extends Module {
     val rd_addr    = UInt(5.W)
     val regWrite   = Bool()
     val memWrite   = Bool()
+    val memToReg   = Bool()
   }
   val ex_mem = RegInit(0.U.asTypeOf(new EX_MEM_Bundle))
 
@@ -166,9 +172,16 @@ class Core(program: Seq[UInt]) extends Module {
   // Update Fetch Unit
   fetch.io.branch_taken   := branch_taken
   fetch.io.jump_target_pc := id_ex.pc + id_ex.imm
+  fetch.io.stall          := hazard.io.stall
 
   // Update Hazard Unit
   hazard.io.branch_taken := branch_taken
+
+  // Load-Use Hazard Detection signals:
+  hazard.io.id_ex_memToReg   := id_ex.memToReg
+  hazard.io.id_ex_rd         := id_ex.rd_addr
+  hazard.io.if_id_rs1        := if_id_instr(19, 15)
+  hazard.io.if_id_rs2        := if_id_instr(24, 20)
 
   // Update EX/MEM Register
   ex_mem.alu_result := alu.io.result
@@ -176,6 +189,7 @@ class Core(program: Seq[UInt]) extends Module {
   ex_mem.rd_addr    := id_ex.rd_addr
   ex_mem.regWrite   := id_ex.regWrite
   ex_mem.memWrite   := id_ex.memWrite
+  ex_mem.memToReg   := id_ex.memToReg
 
   // ==============================================================================
   // MEM STAGE (Memory Access)
@@ -185,8 +199,11 @@ class Core(program: Seq[UInt]) extends Module {
   memIO.io.writeData := ex_mem.rs2_data
   memIO.io.memWrite  := ex_mem.memWrite
 
+  // Read data from memory
+  val memReadData = memIO.io.readData
+
   // Update MEM/WB Register
-  mem_wb.result   := ex_mem.alu_result // Pass ALU result (No Load support yet) =!!!!=
+  mem_wb.result   := Mux(ex_mem.memToReg, memReadData, ex_mem.alu_result)
   mem_wb.rd_addr  := ex_mem.rd_addr
   mem_wb.regWrite := ex_mem.regWrite
 
