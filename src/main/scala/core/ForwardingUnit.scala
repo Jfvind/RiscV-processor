@@ -28,6 +28,38 @@ class ForwardingUnit extends Module {
   io.forwardA := 0.U
   io.forwardB := 0.U
 
+  // ============================== FORWARD A (for rs1) ============================== //
+  when(io.ex_mem_regWrite && (io.ex_mem_rd =/= 0.U) && (io.ex_mem_rd === io.id_ex_rs1)) {
+    // EX/MEM hazard: Forward from MEM stage (most recent data)
+    io.forwardA := 2.U
+  } .elsewhen(io.mem_wb_regWrite && (io.mem_wb_rd =/= 0.U) && (io.mem_wb_rd === io.id_ex_rs1)) {
+    // MEM/WB hazard: Forward from WB stage (only if MEM didn't match)
+    io.forwardA := 1.U
+  } .otherwise {
+    // No hazard: Use data from ID/EX pipeline register
+    io.forwardA := 0.U
+  }
+
+
+  //============================= FORWARD B (for rs2) ============================== //
+  when(io.ex_mem_regWrite && (io.ex_mem_rd =/= 0.U) && (io.ex_mem_rd === io.id_ex_rs2)) {
+    io.forwardB := 2.U
+  } .elsewhen(io.mem_wb_regWrite && (io.mem_wb_rd =/= 0.U) && (io.mem_wb_rd === io.id_ex_rs2)) {
+    io.forwardB := 1.U
+  } .otherwise {
+    io.forwardB := 0.U
+  }
+}
+
+
+
+
+
+
+
+/*
+
+############################# LEGACY CODE #############################
   // EX Hazard (Forward from MEM stage)
   when(io.ex_mem_regWrite && (io.ex_mem_rd =/= 0.U) && (io.ex_mem_rd === io.id_ex_rs1)) {
     io.forwardA := 2.U
@@ -47,3 +79,5 @@ class ForwardingUnit extends Module {
     io.forwardB := 1.U
   }
 }
+
+ */

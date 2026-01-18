@@ -14,8 +14,8 @@ object Programs {
     "h00a00093".U(32.W), // 4: addi x1, x0, 10
     // x2 = x1 + 5 = 15 (0xF). 
     // x1 is in EX stage when this fetches. Must forward from EX.
-    //"h00508113".U(32.W), // 8: addi x2, x1, 5 (x2 = F)
-    "hFBB08113".U(32.W), // (x2 = 5)
+    "h00508113".U(32.W), // 8: addi x2, x1, 5 (x2 = F)
+    //"hFBB08113".U(32.W), This would make it neg? (x2 = 5)
 
     // 3. Test MEM Forwarding (Data Hazard)
     // x4 = 20
