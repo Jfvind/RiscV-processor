@@ -93,37 +93,34 @@ sbt run
 - memWrite: Bool
 - branch: Bool
 - aluSrc: Bool
-- rs1_address 5 bit (Forwarding)
-- rs2_address 5 bit(Forwarding) 
-- MemToReg 1 bit
+- funct3: 3 bits
+- funct7: 7 bits
+- memToReg: Bool
+- jump: Bool
+- jumpReg: Bool
+- auipc: Bool
+- halt: Bool
 
-
-    val aluOp    = UInt(4.W)
-    val funct3   = UInt(3.W)
-    val funct7   = UInt(7.W)
-    val memToReg = Bool()
-    val jump     = Bool()
-    val jumpReg  = Bool()
-    val auipc    = Bool()
 ### EX/MEM 
-- ALU_Result
-- rd: 5 bits
-- RegWrite 1 bit
-- MemRead 1 bit
-- MemWrite 1 bit
-- rs2_data 32 bit (ex. sw rs2, offset(rs1))
-- MemToReg 1 bit
+- alu_Result: 32 bits
+- rs2_data: 32 bits
+- rd_addr: 5 bits
+- regWrite: Bool
+- memWrite: Bool
+- tx: Bool
+- memToReg: Bool
+- pc_plus_4: 32 bits
+- jump: Bool
+- jumpReg: Bool
+- pc: 32 bits
+- imm: 32 bits
+- auipc: Bool
 
-### MEM/WB)
-- ALU_Result: 32 bit
-- Memory_data: 32 bits 
-- rd 5 bits (destination)
-- RegWrite 1 bit
-- MemToReg 1 bit
-
-
+### MEM/WB
+- result: 32 bit 
+- rd_addr: 5 bits
+- regWrite: Bool
 
 ## Dependencies
-
 - Chisel 5.1.0 - Hardware construction language
 - ChiselTest 5.0.2 - Testing framework for Chisel designs
