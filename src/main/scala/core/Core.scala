@@ -4,7 +4,7 @@ package core
 import chisel3._
 import chisel3.util._
 
-class Core(program: Seq[UInt]) extends Module {
+class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module {
   val io = IO(new Bundle {
     // Debug outputs for simulation
     val pc_out      = Output(UInt(32.W))
@@ -21,7 +21,7 @@ class Core(program: Seq[UInt]) extends Module {
   })
 
   // Instantiate Modules
-  val fetch      = Module(new InstructionFetch(program))
+  val fetch      = Module(new InstructionFetch(program, programFile))
   val decode     = Module(new ControlUnit())   // Contains ImmGen
   val regFile    = Module(new RegisterFile())
   val alu        = Module(new ALU())           // Contains ALUConstants

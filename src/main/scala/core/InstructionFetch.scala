@@ -5,8 +5,9 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.loadMemoryFromFileInline
 import chisel3.util.log2Ceil
+import scala.io.Source
 
-class InstructionFetch(program: Seq[UInt]) extends Module {
+class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") extends Module {
   val io = IO(new Bundle {
     // Inputs from the Control Unit / ALU
     val jump_target_pc = Input(UInt(32.W))  // The address to jump/branch to
@@ -19,10 +20,41 @@ class InstructionFetch(program: Seq[UInt]) extends Module {
     val instruction    = Output(UInt(32.W)) // The fetched instruction
   })
 
+   // ======= START: LOAD PROGRAM/TEST LOGIC =======
+  val finalProgram = if (program.nonEmpty) {
+    // 1. Priority: Test-program from Programs.scala or tests
+    program
+  } else if (programFile.nonEmpty) {
+    // 2. Priority: Load specific file from Top.scala / Benchmarks
+    try {
+      val source = Source.fromFile(programFile)
+      val lines = source.getLines().toList
+      source.close()
+      lines.map(hexString =>
+        if (hexString.trim.nonEmpty) ("h" + hexString.trim).U(32.W) else 0.U(32.W)
+        )
+    } catch {
+      case e: Exception =>
+        println(s"CRITICAL ERROR: Could not read the file '$programFile'. ($e)")
+        List("00000013".U(32.W)) // NOP if error
+    }
+  } else {
+    // 3. Fallback: if nothing has been specified
+    println("WARNING: No specified program-sequence nor file-path. Using an empty ROM")
+    List("00000013".U(32.W))
+  }
+
+  // Padding to avoid index-errors for very small programs
+  val romContent = if (finalProgram.length < 4) finalProgram ++ Seq.fill(4)(0.U(32.W)) else finalProgram
+  val rom = VecInit(romContent)
+  val romSize = romContent.length
+
+  // ======= END: LOAD PROGRAM/TEST LOGIC =======
+
   // Program Counter Register
   val pc = RegInit(0.U(32.W))
   // Halt mechanism to prevent PC from running beyond program
-  val maxPC = (program.length * 4).U
+  val maxPC = (romSize * 4).U
   val halted = RegInit(false.B)
   
   // Check if we've reached the end of the program
@@ -40,14 +72,9 @@ class InstructionFetch(program: Seq[UInt]) extends Module {
   }
   // If halted, PC doesn't change (stays at last instruction)
 
-  // --- PIPELINE & UART TEST ROM ---
-  val rom = VecInit(program)
-  // Beregn hvor mange bits der faktisk skal bruges til dette specifikke program
-  val romSize = program.length
-  val indexBits = log2Ceil(romSize.max(1))
-
   // 1. Tag de relevante bits fra PC (sikrer mod warnings)
   // Vi bruger 'min' for at sikre os, at vi ikke crasher hvis programmet er meget lille
+  val indexBits = log2Ceil(romSize.max(1))
   val safeIndex = (pc >> 2.U)(indexBits - 1, 0)
 
   // 2. Logic check for "Out of Bounds" (runtime sikkerhed)
