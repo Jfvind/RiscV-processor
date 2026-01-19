@@ -24,6 +24,7 @@ class ControlUnit extends Module {
     val branch      = Output(Bool())      // Indicates a branch instruction --> Fetch-state (for PC logic). Combined with ALU result to decide if we jump.
     val memToReg    = Output(Bool())  // For Load instructions to select data from memory to write to register
     val jump        = Output(Bool()) //For...... Jumping :D
+    val jumpReg  = Output(Bool())  // (true for JALR, false for JAL)
 
   })
 
@@ -46,6 +47,7 @@ class ControlUnit extends Module {
   io.branch   := false.B
   io.memToReg := false.B
   io.jump     := false.B
+  io.jumpReg := false.B
 
   io.imm      := immGen.io.imm_i
 
@@ -108,10 +110,20 @@ class ControlUnit extends Module {
     // JAL (Jump and Link) - J-Type
     is("b1101111".U) {
       io.jump     := true.B
+      io.jumpReg  := false.B
       io.regWrite := true.B   // Write PC+4 to rd
       io.aluSrc   := true.B   // Use immediate (not used for jump calc)
       io.memToReg := false.B  // Write back PC+4, not memory
       io.imm      := immGen.io.imm_j
+    }
+    // JALR (Jump and Link Register) - I-Type
+    is("b1100111".U) {
+      io.jump     := true.B
+      io.jumpReg  := true.B
+      io.regWrite := true.B
+      io.aluSrc   := true.B   // Use immediate
+      io.memToReg := false.B
+      io.imm      := immGen.io.imm_i
     }
   }
 }

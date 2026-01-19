@@ -176,4 +176,34 @@ object Programs {
     "h00000013".U(32.W), // 20: nop
     "h00000013".U(32.W), // 24: nop
   )
+  // Program 7: JALR Test
+  // Tester både jump target calculation og link-register (return address) logic
+  val jalrTest = Seq(
+    // 0: Setup: x1 = 20 (target address)
+    // notice: x1 bliver opdateret her. Hvis vi ikke har forwarding, har vi en hazard i næste instruktion!
+    "h01400093".U(32.W),
+
+    // 4: JALR x1, x1, 0
+    // rs1 = x1 (20). Target = 20.
+    // rd = x1. Gemmer PC+4 = 8 i x1.
+    // Bemærk: Vi bruger x1 som både source og destination.
+    "h000080e7".U(32.W),
+
+    // --- SKIPPED ZONE ---
+    "h00200113".U(32.W), //  8: addi x2, x0, 2 (Burde blive flushet/skipped)
+    "h00300193".U(32.W), // 12: addi x3, x0, 3 (Burde blive flushet/skipped)
+    "h00000013".U(32.W), // 16: nop            (Buffer/Branch delay slot hvis relevant)
+
+    // --- TARGET ZONE (Address 20 = 0x14) ---
+    // 20: addi x4, x0, 10
+    // Bevis på at vi landede her. x4 skal være 10.
+    "h00a00213".U(32.W),
+
+    // 24: Verify return address
+    // x1 skulle nu indeholde 8 (fra JALR instruktionen i addr 4)
+    // x5 = x1 + 1 = 8 + 1 = 9
+    "h00108293".U(32.W),
+
+    "h00000013".U(32.W)  // 28: nop
+  )
 }

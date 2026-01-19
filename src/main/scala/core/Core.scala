@@ -81,6 +81,7 @@ class Core(program: Seq[UInt]) extends Module {
     val funct7   = UInt(7.W)
     val memToReg = Bool()
     val jump     = Bool()
+    val jumpReg  = Bool()
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
@@ -106,6 +107,7 @@ class Core(program: Seq[UInt]) extends Module {
     id_ex.funct7   := if_id_instr(31, 25)
     id_ex.memToReg := decode.io.memToReg
     id_ex.jump     := decode.io.jump
+    id_ex.jumpReg := decode.io.jumpReg
   }
 
   // ==============================================================================
@@ -123,6 +125,7 @@ class Core(program: Seq[UInt]) extends Module {
     val memToReg   = Bool()
     val pc_plus_4  = UInt(32.W)
     val jump       = Bool()
+    val jumpReg = Bool()
   }
   val ex_mem = RegInit(0.U.asTypeOf(new EX_MEM_Bundle))
 
@@ -184,7 +187,10 @@ class Core(program: Seq[UInt]) extends Module {
   val pc_change = branch_taken || jump_taken
 
   // Jump target (same calculation for both branch and JAL)
-  val jump_target = id_ex.pc + id_ex.imm
+  val jump_target = Mux(id_ex.jumpReg,
+    (forwardA_data + id_ex.imm) & ~1.U,  // JALR: (rs1 + imm) & ~1
+    id_ex.pc + id_ex.imm                  // JAL:  PC + imm
+  )
 
 
   // Update Fetch Unit
@@ -211,6 +217,7 @@ class Core(program: Seq[UInt]) extends Module {
   ex_mem.memToReg   := id_ex.memToReg
   ex_mem.pc_plus_4  := id_ex.pc + 4.U
   ex_mem.jump       := id_ex.jump
+  ex_mem.jumpReg := id_ex.jumpReg
 
   // ==============================================================================
   // MEM STAGE (Memory Access)
