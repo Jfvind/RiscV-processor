@@ -10,6 +10,7 @@ package core
 import chisel3._
 import chisel3.util._
 import core.ALUConstants._
+import core.CSRConstants._
 import core.ControlConstants.{ALU_OP_BRANCH, ALU_OP_ITYPE, ALU_OP_MEM, ALU_OP_RTYPE}
 
 class ControlUnit extends Module {
@@ -27,6 +28,8 @@ class ControlUnit extends Module {
     val jumpReg  = Output(Bool())  // (true for JALR, false for JAL)
     val auipc = Output(Bool())
     val halt = Output(Bool()) // Ecall
+    val csr_op      = Output(UInt(3.W))   // CSR operation (fra CSRConstants)
+    val csr_src_imm = Output(Bool())      // True hvis immediate-variant (CSRRWI etc.)
 
   })
 
@@ -34,7 +37,7 @@ class ControlUnit extends Module {
   // DECODE INSTRUCTIONS HERE
   // Slice the 32-bit intstruction into its components (opcode, funct3, etc.)
     val opcode = io.instruction(6, 0)
-    //val funct3 = io.instruction(14,12) // for ADD/SUB
+    val funct3 = io.instruction(14,12)
     //val funct7 = io.instruction(31,25)
   // ============================================
 
@@ -52,6 +55,8 @@ class ControlUnit extends Module {
   io.jumpReg := false.B
   io.auipc := false.B
   io.halt := false.B
+  io.csr_op   := CSR_OP_NOP
+  io.csr_src_imm := false.B
 
   io.imm      := immGen.io.imm_i
 
@@ -144,17 +149,33 @@ class ControlUnit extends Module {
       // Instruction advances through pipeline but does nothing
       // BAsically a NOP in this simple one-core
     }
-    //ECALL - HALT
+    // SYSTEM (ECALL, EBREAK, CSR)
     is("b1110011".U) {
-      val funct3 = io.instruction(14, 12)
-      val funct12_bit20 = io.instruction(20) // Simplified: bit 20 distinguishes ECALL (0) vs EBREAK (1)
+      val funct12_bit20 = io.instruction(20) // For ECALL/EBREAK
 
-      when(funct3 === 0.U && funct12_bit20 === 0.U) {
-        io.halt := true.B // ECALL
-      } .elsewhen(funct3 === 0.U && funct12_bit20 === 1.U) {
-        io.halt := true.B // EBREAK
+      when(funct3 === 0.U) {
+        // ECALL/EBREAK (ingen CSR)
+        when(funct12_bit20 === 0.U) {
+          io.halt := true.B // ECALL
+        } .elsewhen(funct12_bit20 === 1.U) {
+          io.halt := true.B // EBREAK
+        }
       } .otherwise {
-        // Other SYSTEM (e.g., CSR): Treat as NOP or error (no halt)
+        // CSR-instructions (funct3 1-6)
+        io.regWrite := true.B     // Skriv gammel CSR til rd
+        io.memToReg := false.B    // Resultat fra CSR, ikke mem
+        io.aluOp    := ALU_OP_MEM // Brug ALU til add/or/and for modify (vi genbruger ALU til CSR ops)
+        io.csr_op   := funct3     // Direkte fra funct3 (1=RRW, 2=RRS, etc.)
+
+        // Immediate-variant hvis funct3 >=4
+        when(funct3 >= 4.U) {
+          io.csr_src_imm := true.B
+          io.aluSrc := true.B     // Brug imm (zimm)
+          io.imm := Cat(0.U(27.W), io.instruction(19,15))  // Unsigned 5-bit zimm, zero-extended (override immGen for simplicitet)
+        } .otherwise {
+          io.csr_src_imm := false.B
+          io.aluSrc := false.B    // Brug rs1 (register)
+        }
       }
     }
   }

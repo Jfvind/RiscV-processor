@@ -30,6 +30,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val forwarding = Module(new ForwardingUnit())
   val hazard     = Module(new HazardUnit())
   val serialPort = Module(new Serialport())
+  val csrModule  = Module(new CSRModule())
 
   // ==============================================================================
   // IF STAGE (Instruction Fetch)
@@ -86,6 +87,10 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     val jumpReg  = Bool()
     val auipc    = Bool()
     val halt     = Bool()
+    // CSR Signals
+    val csr_op       = UInt(3.W)   //
+    val csr_src_imm  = Bool()      //
+    val csr_addr     = UInt(12.W)  //
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
@@ -120,6 +125,10 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     id_ex.jumpReg := decode.io.jumpReg
     id_ex.auipc    := decode.io.auipc
     id_ex.halt     := decode.io.halt
+    // CSR Signals
+    id_ex.csr_op      := decode.io.csr_op
+    id_ex.csr_src_imm := decode.io.csr_src_imm
+    id_ex.csr_addr    := if_id_instr(31, 20)    // (CSR address from instruction)
   }
 
   // ==============================================================================
@@ -141,6 +150,8 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     val pc         = UInt(32.W)
     val imm        = UInt(32.W)
     val auipc      = Bool()
+    val csr_data   = UInt(32.W)
+    val is_csr     = Bool()
   }
   val ex_mem = RegInit(0.U.asTypeOf(new EX_MEM_Bundle))
 
@@ -177,6 +188,22 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   alu.io.alu_op := id_ex.alu_op
   alu.io.alu_a  := forwardA_data
   alu.io.alu_b  := Mux(id_ex.aluSrc, id_ex.imm, forwardB_data)
+
+  // === CSR Module Connections ===
+  csrModule.io.csr_addr    := id_ex.csr_addr
+  csrModule.io.csr_op      := id_ex.csr_op
+
+  // CSR data input: Vælg mellem register (rs1) eller immediate (zimm)
+  csrModule.io.csr_data_in := Mux(id_ex.csr_src_imm,
+    id_ex.imm,       // Immediate variant (CSRRWI, etc.)
+    forwardA_data    // Register variant (CSRRW, etc.) - use forwarded rs1
+  )
+
+  // Core events for CSR updates
+  csrModule.io.inst_retire  := mem_wb.regWrite  // Count retired instructions
+  csrModule.io.pc_in        := id_ex.pc
+  csrModule.io.cause_in     := 0.U  // No exceptions yet
+  csrModule.io.trap_trigger := false.B  // No traps yet
 
   // Branch Logic (Resolved in EX stage)
   // Vi bruger funct3 til at vælge præcis hvilket flag (Zero, Less, etc.) vi skal reagere på
@@ -231,6 +258,8 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   ex_mem.pc         := id_ex.pc
   ex_mem.imm        := id_ex.imm
   ex_mem.auipc      := id_ex.auipc
+  ex_mem.csr_data   := csrModule.io.csr_data_out
+  ex_mem.is_csr     := (id_ex.csr_op =/= 0.U)
 
   // ==============================================================================
   // MEM STAGE (Memory Access)
@@ -317,11 +346,12 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val memReadData = memIO.io.readData
 
   // Select writeback data:
-  // Priority: Jump (PC+4) > Memory > ALU result
+  // Priority: Jump (PC+4) > AUIPC > CSR > Memory > ALU result
   val wb_data = MuxCase(ex_mem.alu_result, Seq(
-    ex_mem.jump      -> ex_mem.pc_plus_4,  // JAL/JALR: write PC+4
-    ex_mem.auipc     -> (ex_mem.pc + ex_mem.imm),
-    ex_mem.memToReg  -> memReadData         // Load: write memory data
+    ex_mem.jump      -> ex_mem.pc_plus_4,       // JAL/JALR: write PC+4
+    ex_mem.auipc     -> (ex_mem.pc + ex_mem.imm), // AUIPC: write PC+imm
+    ex_mem.is_csr    -> ex_mem.csr_data,        // ← ADD: CSR: write CSR value
+    ex_mem.memToReg  -> memReadData              // Load: write memory data
   ))
 
 
