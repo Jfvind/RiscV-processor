@@ -1,7 +1,7 @@
 # RiscV-processor
 RiscV processor on FPGA following DTU course 02114
 # Block diagram
-![Block diagram](block_diagram/2/RISC-V Stage 2.drawio.svg)
+![Block diagram](block_diagram/2/RISC-V%20Stage%202.drawio.svg)
 # Good links
 For Risc V arch:
 https://luplab.gitlab.io/rvcodecjs/#q=mul&abi=false&isa=RV128I
