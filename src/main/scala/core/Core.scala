@@ -71,14 +71,14 @@ class Core(program: Seq[UInt]) extends Module {
     val rs1_addr = UInt(5.W)
     val rs2_addr = UInt(5.W)
     val rd_addr  = UInt(5.W)
-    val alu_op   = UInt(4.W)
+    val alu_op   = UInt(4.W) // Output of ALUDecoder
     val tx       = Bool()
     // Control Signals
     val regWrite = Bool()
     val memWrite = Bool()
     val branch   = Bool()
     val aluSrc   = Bool()
-    val aluOp    = UInt(4.W)
+    //val aluOp    = UInt(4.W) // Input of 
     val funct3   = UInt(3.W)
     val funct7   = UInt(7.W)
     val memToReg = Bool()
@@ -111,7 +111,7 @@ class Core(program: Seq[UInt]) extends Module {
     id_ex.memWrite := decode.io.memWrite
     id_ex.branch   := decode.io.branch
     id_ex.aluSrc   := decode.io.aluSrc
-    id_ex.aluOp    := decode.io.aluOp
+    //id_ex.aluOp    := decode.io.aluOp
     id_ex.funct3   := if_id_instr(14, 12)
     id_ex.funct7   := if_id_instr(31, 25)
     id_ex.memToReg := decode.io.memToReg
