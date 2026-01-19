@@ -85,6 +85,7 @@ class Core(program: Seq[UInt]) extends Module {
     val jump     = Bool()
     val jumpReg  = Bool()
     val auipc    = Bool()
+    val halt     = Bool()
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
@@ -118,6 +119,7 @@ class Core(program: Seq[UInt]) extends Module {
     id_ex.jump     := decode.io.jump
     id_ex.jumpReg := decode.io.jumpReg
     id_ex.auipc    := decode.io.auipc
+    id_ex.halt     := decode.io.halt
   }
 
   // ==============================================================================
@@ -204,6 +206,7 @@ class Core(program: Seq[UInt]) extends Module {
   fetch.io.branch_taken   := pc_change
   fetch.io.jump_target_pc := jump_target
   fetch.io.stall          := hazard.io.stall
+  fetch.io.halt           := id_ex.halt
 
   // Update Hazard Unit
   hazard.io.branch_taken := pc_change

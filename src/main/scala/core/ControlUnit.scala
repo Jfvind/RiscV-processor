@@ -26,6 +26,7 @@ class ControlUnit extends Module {
     val jump        = Output(Bool()) //For...... Jumping :D
     val jumpReg  = Output(Bool())  // (true for JALR, false for JAL)
     val auipc = Output(Bool())
+    val halt = Output(Bool()) // Ecall
 
   })
 
@@ -50,90 +51,91 @@ class ControlUnit extends Module {
   io.jump     := false.B
   io.jumpReg := false.B
   io.auipc := false.B
+  io.halt := false.B
 
   io.imm      := immGen.io.imm_i
 
   switch(opcode) {
     // 1. R-Type (add, sub, xor, etc.)
     is("b0110011".U) {
-      io.aluOp    := ALU_OP_RTYPE // Fortæl ALUDecoder at det er R-type
+      io.aluOp := ALU_OP_RTYPE // Fortæl ALUDecoder at det er R-type
       io.regWrite := true.B
-      io.aluSrc   := false.B      // Brug Register (rs2) som input B
+      io.aluSrc := false.B // Brug Register (rs2) som input B
       io.memToReg := false.B
     }
 
     // 2. I-Type Arithmetic (addi, etc.)
     is("b0010011".U) {
-      io.aluOp    := ALU_OP_ITYPE // ALUDecode
+      io.aluOp := ALU_OP_ITYPE // ALUDecode
       io.regWrite := true.B
-      io.aluSrc   := true.B       // Brug Immediate som input B
+      io.aluSrc := true.B // Brug Immediate som input B
       io.memToReg := false.B
-      io.imm      := immGen.io.imm_i
+      io.imm := immGen.io.imm_i
     }
 
     // 3. Load (lw)
     is("b0000011".U) {
-      io.aluOp    := ALU_OP_MEM   // Vi skal lægge sammen (Base + Offset)
-      io.regWrite := true.B       // Vi skriver data fra memory til register
-      io.aluSrc   := true.B       // Adresse offset er immediate
-      io.memToReg := true.B       //Mem not ALU
-      io.imm      := immGen.io.imm_i
+      io.aluOp := ALU_OP_MEM // Vi skal lægge sammen (Base + Offset)
+      io.regWrite := true.B // Vi skriver data fra memory til register
+      io.aluSrc := true.B // Adresse offset er immediate
+      io.memToReg := true.B //Mem not ALU
+      io.imm := immGen.io.imm_i
       //Memread
     }
 
     // 4. Store (sw) - S-Type
     is("b0100011".U) {
-      io.aluOp    := ALU_OP_MEM   // Vi skal lægge sammen (Base + Offset)
+      io.aluOp := ALU_OP_MEM // Vi skal lægge sammen (Base + Offset)
       io.memWrite := true.B
-      io.aluSrc   := true.B       // Adresse offset er immediate
-      io.regWrite := false.B      // Stores returnerer ikke noget til register
+      io.aluSrc := true.B // Adresse offset er immediate
+      io.regWrite := false.B // Stores returnerer ikke noget til register
       io.memToReg := false.B
-      io.imm      := immGen.io.imm_s
+      io.imm := immGen.io.imm_s
     }
 
     // 5. Branch (beq, bne, etc.) - B-Type
     is("b1100011".U) {
-      io.aluOp    := ALU_OP_BRANCH // Fortæl ALUDecoder at lave sammenligning
-      io.branch   := true.B
-      io.aluSrc   := false.B       // Branches sammenligner Reg vs Reg
+      io.aluOp := ALU_OP_BRANCH // Fortæl ALUDecoder at lave sammenligning
+      io.branch := true.B
+      io.aluSrc := false.B // Branches sammenligner Reg vs Reg
       io.regWrite := false.B
       io.memToReg := false.B
-      io.imm      := immGen.io.imm_b
+      io.imm := immGen.io.imm_b
     }
 
     // 6. LUI (Load Upper Immediate)
     is("b0110111".U) {
-      io.aluOp    := ALU_OP_MEM
+      io.aluOp := ALU_OP_MEM
       io.regWrite := true.B
-      io.aluSrc   := true.B
+      io.aluSrc := true.B
       io.memToReg := false.B
-      io.imm      := immGen.io.imm_u
+      io.imm := immGen.io.imm_u
     }
     // JAL (Jump and Link) - J-Type
     is("b1101111".U) {
-      io.jump     := true.B
-      io.jumpReg  := false.B
-      io.regWrite := true.B   // Write PC+4 to rd
-      io.aluSrc   := true.B   // Use immediate (not used for jump calc)
-      io.memToReg := false.B  // Write back PC+4, not memory
-      io.imm      := immGen.io.imm_j
+      io.jump := true.B
+      io.jumpReg := false.B
+      io.regWrite := true.B // Write PC+4 to rd
+      io.aluSrc := true.B // Use immediate (not used for jump calc)
+      io.memToReg := false.B // Write back PC+4, not memory
+      io.imm := immGen.io.imm_j
     }
     // JALR (Jump and Link Register) - I-Type
     is("b1100111".U) {
-      io.jump     := true.B
-      io.jumpReg  := true.B
+      io.jump := true.B
+      io.jumpReg := true.B
       io.regWrite := true.B
-      io.aluSrc   := true.B   // Use immediate
+      io.aluSrc := true.B // Use immediate
       io.memToReg := false.B
-      io.imm      := immGen.io.imm_i
+      io.imm := immGen.io.imm_i
     }
     // AUIPC
     is("b0010111".U) {
       io.regWrite := true.B
-      io.aluSrc   := true.B
+      io.aluSrc := true.B
       io.memToReg := false.B
-      io.auipc    := true.B
-      io.imm      := immGen.io.imm_u
+      io.auipc := true.B
+      io.imm := immGen.io.imm_u
     }
     // FENCE - Memory ordering (NOP for single-core)
     is("b0001111".U) {
@@ -141,6 +143,19 @@ class ControlUnit extends Module {
       // No register write, no memory access, no jumps
       // Instruction advances through pipeline but does nothing
       // BAsically a NOP in this simple one-core
+    }
+    //ECALL - HALT
+    is("b1110011".U) {
+      val funct3 = io.instruction(14, 12)
+      val funct12_bit20 = io.instruction(20) // Simplified: bit 20 distinguishes ECALL (0) vs EBREAK (1)
+
+      when(funct3 === 0.U && funct12_bit20 === 0.U) {
+        io.halt := true.B // ECALL
+      } .elsewhen(funct3 === 0.U && funct12_bit20 === 1.U) {
+        io.halt := true.B // EBREAK
+      } .otherwise {
+        // Other SYSTEM (e.g., CSR): Treat as NOP or error (no halt)
+      }
     }
   }
 }
