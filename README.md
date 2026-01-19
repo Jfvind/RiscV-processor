@@ -77,50 +77,50 @@ sbt run
 # Signals in pipeline
 ### IF/ID register:
 - instruction: 32 bits
-- PC: 32 bits
+- PC:          32 bits
 
 ### ID/EX register:
-- pc: 32 bits
-- rs1_data: 32 bits
-- rs2_data: 32 bits
-- imm: 32 bits
-- rs1_addr: 5 bits (Forwarding)
-- rs2_addr: 5 bits (Forwarding)
-- rd_addr: 5 bits
-- alu_op: 4 bits (R-type: add, sub, and, or, xor, sll, srl, sra osv)
-- tx: Bool
-- regWrite: Bool
-- memWrite: Bool
-- branch: Bool
-- aluSrc: Bool
-- funct3: 3 bits
-- funct7: 7 bits
-- memToReg: Bool
-- jump: Bool
-- jumpReg: Bool
-- auipc: Bool
-- halt: Bool
+- pc:          32 bits
+- rs1_data:    32 bits
+- rs2_data:    32 bits
+- imm:         32 bits
+- rs1_addr:     5 bits (Forwarding)
+- rs2_addr:     5 bits (Forwarding)
+- rd_addr:      5 bits
+- alu_op:       4 bits 
+- tx:           Bool
+- regWrite:     Bool
+- memWrite:     Bool
+- branch:       Bool
+- aluSrc:       Bool
+- funct3:       3 bits
+- funct7:       7 bits
+- memToReg:     Bool
+- jump:         Bool
+- jumpReg:      Bool
+- auipc:        Bool
+- halt:         Bool
 
 ### EX/MEM 
-- alu_Result: 32 bits
-- rs2_data: 32 bits
-- rd_addr: 5 bits
-- regWrite: Bool
-- memWrite: Bool
-- tx: Bool
-- memToReg: Bool
-- pc_plus_4: 32 bits
-- jump: Bool
-- jumpReg: Bool
-- pc: 32 bits
-- imm: 32 bits
-- auipc: Bool
+- alu_Result:  32 bits
+- rs2_data:    32 bits
+- rd_addr:      5 bits
+- regWrite:     Bool
+- memWrite:     Bool
+- tx:           Bool
+- memToReg:     Bool
+- pc_plus_4:   32 bits
+- jump:         Bool
+- jumpReg:      Bool
+- pc:          32 bits
+- imm:         32 bits
+- auipc:        Bool
 
 ### MEM/WB
-- result: 32 bit 
-- rd_addr: 5 bits
-- regWrite: Bool
+- result:      32 bit 
+- rd_addr:      5 bits
+- regWrite:     Bool
 
 ## Dependencies
-- Chisel 5.1.0 - Hardware construction language
-- ChiselTest 5.0.2 - Testing framework for Chisel designs
+- Chisel 6.2.0 - Hardware description language
+- ChiselTest 6.0.0 - Testing framework for Chisel designs
