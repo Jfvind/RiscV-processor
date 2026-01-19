@@ -25,6 +25,7 @@ class ControlUnit extends Module {
     val memToReg    = Output(Bool())  // For Load instructions to select data from memory to write to register
     val jump        = Output(Bool()) //For...... Jumping :D
     val jumpReg  = Output(Bool())  // (true for JALR, false for JAL)
+    val auipc = Output(Bool())
 
   })
 
@@ -48,6 +49,7 @@ class ControlUnit extends Module {
   io.memToReg := false.B
   io.jump     := false.B
   io.jumpReg := false.B
+  io.auipc := false.B
 
   io.imm      := immGen.io.imm_i
 
@@ -124,6 +126,14 @@ class ControlUnit extends Module {
       io.aluSrc   := true.B   // Use immediate
       io.memToReg := false.B
       io.imm      := immGen.io.imm_i
+    }
+    // AUIPC
+    is("b0010111".U) {
+      io.regWrite := true.B
+      io.aluSrc   := true.B
+      io.memToReg := false.B
+      io.auipc    := true.B
+      io.imm      := immGen.io.imm_u
     }
   }
 }

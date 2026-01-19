@@ -84,6 +84,7 @@ class Core(program: Seq[UInt]) extends Module {
     val memToReg = Bool()
     val jump     = Bool()
     val jumpReg  = Bool()
+    val auipc    = Bool()
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
@@ -116,6 +117,7 @@ class Core(program: Seq[UInt]) extends Module {
     id_ex.memToReg := decode.io.memToReg
     id_ex.jump     := decode.io.jump
     id_ex.jumpReg := decode.io.jumpReg
+    id_ex.auipc    := decode.io.auipc
   }
 
   // ==============================================================================
@@ -134,6 +136,9 @@ class Core(program: Seq[UInt]) extends Module {
     val pc_plus_4  = UInt(32.W)
     val jump       = Bool()
     val jumpReg = Bool()
+    val pc         = UInt(32.W)
+    val imm        = UInt(32.W)
+    val auipc      = Bool()
   }
   val ex_mem = RegInit(0.U.asTypeOf(new EX_MEM_Bundle))
 
@@ -220,6 +225,9 @@ class Core(program: Seq[UInt]) extends Module {
   ex_mem.pc_plus_4  := id_ex.pc + 4.U
   ex_mem.jump       := id_ex.jump
   ex_mem.jumpReg := id_ex.jumpReg
+  ex_mem.pc         := id_ex.pc
+  ex_mem.imm        := id_ex.imm
+  ex_mem.auipc      := id_ex.auipc
 
   // ==============================================================================
   // MEM STAGE (Memory Access)
@@ -309,6 +317,7 @@ class Core(program: Seq[UInt]) extends Module {
   // Priority: Jump (PC+4) > Memory > ALU result
   val wb_data = MuxCase(ex_mem.alu_result, Seq(
     ex_mem.jump      -> ex_mem.pc_plus_4,  // JAL/JALR: write PC+4
+    ex_mem.auipc     -> (ex_mem.pc + ex_mem.imm),
     ex_mem.memToReg  -> memReadData         // Load: write memory data
   ))
 
