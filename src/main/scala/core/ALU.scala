@@ -89,5 +89,5 @@ class ALU extends Module {
 
   //================  ZERO FLAG ==========================================================
   // Output true if the result is exactly 0. Used for BEQ/BNE branches.
-  io.zero := (adder_result === 0.U)
+  io.zero := (io.alu_a === io.alu_b)
 }
