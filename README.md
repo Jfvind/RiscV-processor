@@ -66,13 +66,13 @@ RiscV-Processor/
 
 ### Commands
 
-```bash
+´´´
 # Run tests
 sbt test
 
 # Compile processor to .sv
 sbt run
-```
+´´´
 
 # Signals in pipeline
 ### IF/ID register:
