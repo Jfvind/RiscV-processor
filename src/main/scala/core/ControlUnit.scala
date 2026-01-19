@@ -135,5 +135,12 @@ class ControlUnit extends Module {
       io.auipc    := true.B
       io.imm      := immGen.io.imm_u
     }
+    // FENCE - Memory ordering (NOP for single-core)
+    is("b0001111".U) {
+      // Leave all signals at default (false)
+      // No register write, no memory access, no jumps
+      // Instruction advances through pipeline but does nothing
+      // BAsically a NOP in this simple one-core
+    }
   }
 }
