@@ -25,6 +25,7 @@ class Core(program: Seq[UInt]) extends Module {
   val decode     = Module(new ControlUnit())   // Contains ImmGen
   val regFile    = Module(new RegisterFile())
   val alu        = Module(new ALU())           // Contains ALUConstants
+  val aluDecoder = Module(new ALUDecoder())
   val memIO      = Module(new MemoryMapping()) // Decides RAM or LED (Contains DataMemory)
   val forwarding = Module(new ForwardingUnit())
   val hazard     = Module(new HazardUnit())
@@ -70,6 +71,7 @@ class Core(program: Seq[UInt]) extends Module {
     val rs1_addr = UInt(5.W)
     val rs2_addr = UInt(5.W)
     val rd_addr  = UInt(5.W)
+    val alu_op   = UInt(4.W)
     val tx       = Bool()
     // Control Signals
     val regWrite = Bool()
@@ -85,6 +87,11 @@ class Core(program: Seq[UInt]) extends Module {
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
+  // ALUDecoder
+  aluDecoder.io.aluOp  := decode.io.aluOp   // 2-bit fra Control Unit
+  aluDecoder.io.funct3 := if_id_instr(14, 12)  // 3-bit fra instruktion
+  aluDecoder.io.funct7 := if_id_instr(31, 25)  // 7-bit fra instruktion
+
   // Update ID/EX Register
   when(hazard.io.flush || hazard.io.stall) {
     id_ex := 0.U.asTypeOf(new ID_EX_Bundle)
@@ -96,6 +103,7 @@ class Core(program: Seq[UInt]) extends Module {
     id_ex.rs1_addr := if_id_instr(19, 15)
     id_ex.rs2_addr := if_id_instr(24, 20)
     id_ex.rd_addr  := if_id_instr(11, 7)
+    id_ex.alu_op   := aluDecoder.io.op
     id_ex.tx       := serialPort.io.tx
     // Control Signals
     id_ex.regWrite := decode.io.regWrite
@@ -157,15 +165,9 @@ class Core(program: Seq[UInt]) extends Module {
     1.U -> mem_wb.result,
     2.U -> ex_mem.alu_result
   ))
-//instantiate ALUDecode
-  val aluDecoder = Module(new ALUDecoder())
-  // wire in
-  aluDecoder.io.aluOp  := id_ex.aluOp   // 2-bit fra Control Unit
-  aluDecoder.io.funct3 := id_ex.funct3  // 3-bit fra instruktion
-  aluDecoder.io.funct7 := id_ex.funct7  // 7-bit fra instruktion
 
   // ALU Connections
-  alu.io.alu_op := aluDecoder.io.op
+  alu.io.alu_op := id_ex.alu_op
   alu.io.alu_a  := forwardA_data
   alu.io.alu_b  := Mux(id_ex.aluSrc, id_ex.imm, forwardB_data)
 
