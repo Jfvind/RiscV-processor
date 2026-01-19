@@ -57,7 +57,7 @@ RiscV-Processor/
 ├── build.sbt                  # The build configuration file
 ├── .gitignore
 └── README.md
-´´´
+```
 ## Building and Testing
 
 ### Requirements
@@ -66,64 +66,61 @@ RiscV-Processor/
 
 ### Commands
 
-´´´
+```bash
 # Run tests
 sbt test
 
 # Compile processor to .sv
 sbt run
-´´´
+```
 
 # Signals in pipeline
 ### IF/ID register:
 - instruction: 32 bits
-- PC: 32 bits
+- PC:          32 bits
 
 ### ID/EX register:
-- pc: 32 bits
-- rs1_data: 32 bits
-- rs2_data: 32 bits
-- imm: 32 bits
-- rs1_addr: 5 bits (Forwarding)
-- rs2_addr: 5 bits (Forwarding)
-- rd_addr: 5 bits
-- alu_op: 4 bits (R-type: add, sub, and, or, xor, sll, srl, sra osv)
-- tx: Bool
-- regWrite: Bool
-- memWrite: Bool
-- branch: Bool
-- aluSrc: Bool
-- rs1_address 5 bit (Forwarding)
-- rs2_address 5 bit(Forwarding) 
-- MemToReg 1 bit
+- pc:          32 bits
+- rs1_data:    32 bits
+- rs2_data:    32 bits
+- imm:         32 bits
+- rs1_addr:     5 bits (Forwarding)
+- rs2_addr:     5 bits (Forwarding)
+- rd_addr:      5 bits
+- alu_op:       4 bits 
+- tx:           Bool
+- regWrite:     Bool
+- memWrite:     Bool
+- branch:       Bool
+- aluSrc:       Bool
+- funct3:       3 bits
+- funct7:       7 bits
+- memToReg:     Bool
+- jump:         Bool
+- jumpReg:      Bool
+- auipc:        Bool
+- halt:         Bool
 
-
-    val aluOp    = UInt(4.W)
-    val funct3   = UInt(3.W)
-    val funct7   = UInt(7.W)
-    val memToReg = Bool()
-    val jump     = Bool()
-    val jumpReg  = Bool()
-    val auipc    = Bool()
 ### EX/MEM 
-- ALU_Result
-- rd: 5 bits
-- RegWrite 1 bit
-- MemRead 1 bit
-- MemWrite 1 bit
-- rs2_data 32 bit (ex. sw rs2, offset(rs1))
-- MemToReg 1 bit
+- alu_Result:  32 bits
+- rs2_data:    32 bits
+- rd_addr:      5 bits
+- regWrite:     Bool
+- memWrite:     Bool
+- tx:           Bool
+- memToReg:     Bool
+- pc_plus_4:   32 bits
+- jump:         Bool
+- jumpReg:      Bool
+- pc:          32 bits
+- imm:         32 bits
+- auipc:        Bool
 
-### MEM/WB)
-- ALU_Result: 32 bit
-- Memory_data: 32 bits 
-- rd 5 bits (destination)
-- RegWrite 1 bit
-- MemToReg 1 bit
-
-
+### MEM/WB
+- result:      32 bit 
+- rd_addr:      5 bits
+- regWrite:     Bool
 
 ## Dependencies
-
-- Chisel 5.1.0 - Hardware construction language
-- ChiselTest 5.0.2 - Testing framework for Chisel designs
+- Chisel 6.2.0 - Hardware description language
+- ChiselTest 6.0.0 - Testing framework for Chisel designs
