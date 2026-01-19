@@ -57,7 +57,7 @@ RiscV-Processor/
 ├── build.sbt                  # The build configuration file
 ├── .gitignore
 └── README.md
-´´´
+```
 ## Building and Testing
 
 ### Requirements
@@ -66,13 +66,13 @@ RiscV-Processor/
 
 ### Commands
 
-´´´
+```bash
 # Run tests
 sbt test
 
 # Compile processor to .sv
 sbt run
-´´´
+```
 
 # Signals in pipeline
 ### IF/ID register:
