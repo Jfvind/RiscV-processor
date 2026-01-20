@@ -27,7 +27,7 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
 
   // ======= START: NY HUKOMMELSES-LOGIK =======
   val ramSize = 17500
-  val ram = Mem(ramSize, UInt(32.W))
+  val ram = SyncReadMem(ramSize, UInt(32.W))
 
   // 1. Priority: If a file-path is specified, read it to RAM
   if (programFile.nonEmpty) {
@@ -45,7 +45,7 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
 
   // Writelogic (used by the bootloader or by the self-patching test)
   when(io.write_en) {
-    ram(io.write_addr >> 2.U) := io.write_data
+    ram.write(io.write_addr >> 2.U, io.write_data)
   }
   // ======= END: NY HUKOMMELSES-LOGIK =======
 
@@ -54,6 +54,11 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   // Halt mechanism to prevent PC from running beyond program
   val maxPC = currentRomSize * 4.U
   val halted = RegInit(false.B)
+
+  // We calculate next_pc, before the PC-register is updated.
+  // We need the next adress to start reading from SyncReadMem now, so that the next instr is ready in the next clockcycle.
+  // If branch_taken is true, we jump. Otherwise, we move to the next instruction (PC + 4).
+  val next_pc = Mux(io.branch_taken, io.jump_target_pc, pc + 4.U)
   
   // Check if we've reached the end of the program
   when(!halted && pc >= maxPC - 4.U) {
@@ -62,8 +67,6 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   
   // PC update logic
   when(!halted && !io.stall) {
-    // If branch_taken is true, we jump. Otherwise, we move to the next instruction (PC + 4).
-    val next_pc = Mux(io.branch_taken, io.jump_target_pc, pc + 4.U)
     pc := next_pc
   }.elsewhen(io.halt) {
     halted := true.B
@@ -78,7 +81,11 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   val safeIndex = (pc >> 2.U)(log2Ceil(testRomContent.length.max(1)) - 1, 0)
 
   // 1. Fetch from RAM (used for benchmarks or bootloading)
-  val instrFromRam = ram((pc - 0x8000.U) >> 2.U)
+  // to hit the right adress with syncedmem (1 cycle delay), we can read from the adress vi are
+  // on our way to (next_pc).
+  // We only read if the processor is not ideling
+  val ramReadAddr = (next_pc - 0x8000.U) >> 2.U
+  val instrFromRam = ram.read(ramReadAddr, !io.stall && !halted)
 
   // 2. Fetch from vector (used for old Scala tests)
   val instrFromRom = testRom(safeIndex)
@@ -88,7 +95,7 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   // If a test-program is loaded we use the vector. Otherwise we use the bottom of the RAM (0x000+)
   val fetchedInstr = Mux(is_in_ram_range,
     instrFromRam,
-    Mux(hasTestProgram, instrFromRom, ram(pc >> 2.U))
+    Mux(hasTestProgram, instrFromRom, ram.read(next_pc >> 2.U, !io.stall))
   )
   // ====== END: FETCH LOGIC ======
   io.instruction := Mux(halted, 0x00000013.U, fetchedInstr)
