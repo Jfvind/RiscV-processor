@@ -15,46 +15,44 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
     val stall          = Input(Bool())
     val halt           = Input(Bool())  // Halt signal to stop fetching instructions
 
+    // New ports for bootloader-writing
+    val write_en       = Input(Bool())
+    val write_addr     = Input(UInt(32.W))
+    val write_data     = Input(UInt(32.W))
+
     // Outputs to the Decode Stage
     val pc             = Output(UInt(32.W)) // Current PC (needed for jumps)
     val instruction    = Output(UInt(32.W)) // The fetched instruction
   })
 
-   // ======= START: LOAD PROGRAM/TEST LOGIC =======
-  val finalProgram = if (program.nonEmpty) {
-    // 1. Priority: Test-program from Programs.scala or tests
-    program
-  } else if (programFile.nonEmpty) {
-    // 2. Priority: Load specific file from Top.scala / Benchmarks
-    try {
-      val source = Source.fromFile(programFile)
-      val lines = source.getLines().toList
-      source.close()
-      lines.map(hexString =>
-        if (hexString.trim.nonEmpty) ("h" + hexString.trim).U(32.W) else 0.U(32.W)
-        )
-    } catch {
-      case e: Exception =>
-        println(s"CRITICAL ERROR: Could not read the file '$programFile'. ($e)")
-        List("00000013".U(32.W)) // NOP if error
-    }
-  } else {
-    // 3. Fallback: if nothing has been specified
-    println("WARNING: No specified program-sequence nor file-path. Using an empty ROM")
-    List("00000013".U(32.W))
+  // ======= START: NY HUKOMMELSES-LOGIK =======
+  val ramSize = 17500
+  val ram = Mem(ramSize, UInt(32.W))
+
+  // 1. Priority: If a file-path is specified, read it to RAM
+  if (programFile.nonEmpty) {
+    loadMemoryFromFileInline(ram, programFile)
   }
 
-  // Padding to avoid index-errors for very small programs
-  val romContent = if (finalProgram.length < 4) finalProgram ++ Seq.fill(4)(0.U(32.W)) else finalProgram
-  val rom = VecInit(romContent)
-  val romSize = romContent.length
+  // 2. Priority: Test-program from Programs.scala or tests (Vektor)
+  // This ensures that the old tests still work as intended
+  val hasTestProgram = (program.nonEmpty).B
+  val testRomContent = if (program.nonEmpty) program else Seq.fill(4)(0.U(32.W))
+  val testRom = VecInit(testRomContent)
+  
+  // romSize bruges til halted-logic and out-of-bounds check
+  val currentRomSize = if (program.nonEmpty) testRomContent.length.U else ramSize.U
 
-  // ======= END: LOAD PROGRAM/TEST LOGIC =======
+  // Writelogic (used by the bootloader or by the self-patching test)
+  when(io.write_en) {
+    ram(io.write_addr >> 2.U) := io.write_data
+  }
+  // ======= END: NY HUKOMMELSES-LOGIK =======
 
   // Program Counter Register
   val pc = RegInit(0.U(32.W))
   // Halt mechanism to prevent PC from running beyond program
-  val maxPC = (romSize * 4).U
+  val maxPC = currentRomSize * 4.U
   val halted = RegInit(false.B)
   
   // Check if we've reached the end of the program
@@ -72,22 +70,27 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   }
   // If halted, PC doesn't change (stays at last instruction)
 
-  // 1. Tag de relevante bits fra PC (sikrer mod warnings)
-  // Vi bruger 'min' for at sikre os, at vi ikke crasher hvis programmet er meget lille
-  val indexBits = log2Ceil(romSize.max(1))
-  val safeIndex = (pc >> 2.U)(indexBits - 1, 0)
+  // ====== START: FETCH LOGIC ======
+  // Check if we are in the RAM-area (0x8000+) or if we are using a test-vector
+  val is_in_ram_range = pc >= 0x8000.U
 
-  // 2. Logic check for "Out of Bounds" (runtime sikkerhed)
-  val pc_word_addr = pc >> 2.U
-  val is_valid_addr = pc_word_addr < romSize.U(32.W)
+  // Safety index for the test-vector
+  val safeIndex = (pc >> 2.U)(log2Ceil(testRomContent.length.max(1)) - 1, 0)
 
-  // 3. Fetch
-  val fetchedInstr = Mux(is_valid_addr,
-    rom(safeIndex),
-    0x00000013.U) // NOP
-  
+  // 1. Fetch from RAM (used for benchmarks or bootloading)
+  val instrFromRam = ram((pc - 0x8000.U) >> 2.U)
+
+  // 2. Fetch from vector (used for old Scala tests)
+  val instrFromRom = testRom(safeIndex)
+
+  // 3. Choose the correct source:
+  // If we are over 0x8000, we always read from RAM.
+  // If a test-program is loaded we use the vector. Otherwise we use the bottom of the RAM (0x000+)
+  val fetchedInstr = Mux(is_in_ram_range,
+    instrFromRam,
+    Mux(hasTestProgram, instrFromRom, ram(pc >> 2.U))
+  )
+  // ====== END: FETCH LOGIC ======
   io.instruction := Mux(halted, 0x00000013.U, fetchedInstr)
-
-  // Output the current PC
   io.pc := pc
 }

@@ -19,15 +19,29 @@ class MemoryMapping extends Module {
 
     // Uart prod
     val uartValid = Output(Bool())
+
+    // Signlas for instructionFetch
+    val imemWriteEn = Output(Bool())
+    val imemWriteAddr = Output(UInt(32.W))
   })
 
   // Instantiate real DataMemory (RAM)
   val dataMem = Module(new DataMemory())
 
   // --- ADDRESS MAPPING ---
+  // We define everything form 0x8000 and up is for Instruction-mem
+  val isImemWrite = (io.address >= 0x8000.U)
+
   val isLed = (io.address === 100.U)
   val isUart = (io.address >= 200.U) && (io.address < 400.U) // x00 = 200, x01 = 204, x31 = 324
-  val isRam = !isLed && !isUart // If not an IO then it is RAM (DataMemory)
+
+  // We need to ensure that we wont write to Datamem, if we are trying to write to
+  // I-mem, LED or UART
+  val isRam = !isLed && !isUart && !isImemWrite // If not an IO nor Imem, then it is RAM (DataMemory)
+
+  // --- I-MEM LOGIC ---
+  io.imemWriteEn   := io.memWrite && isImemWrite
+  io.imemWriteAddr := io.address - 0x8000.U
 
   // --- RAM LOGIC ---
   dataMem.io.address   := io.address

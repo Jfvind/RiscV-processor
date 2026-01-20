@@ -234,6 +234,9 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   fetch.io.jump_target_pc := jump_target
   fetch.io.stall          := hazard.io.stall
   fetch.io.halt           := id_ex.halt
+  fetch.io.write_en       := memIO.io.imemWriteEn // Signal from MemoryMapping that tells if we are writing to 0x8000+
+  fetch.io.write_addr     := memIO.io.imemWriteAddr // The calibrated adress (without 0x8000 offset)
+  fetch.io.write_data     := ex_mem.rs2_data // Data that needs to be stored (from sw instr)
 
   // Update Hazard Unit
   hazard.io.branch_taken := pc_change
