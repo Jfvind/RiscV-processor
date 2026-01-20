@@ -24,6 +24,8 @@ RiscV-Processor/
 |   |   |   |   ├── ControlConstants.scala
 │   │   │   │   ├── ControlUnit.scala
 │   │   │   │   ├── Core.scala # Top-level module connecting components
+│   │   │   │   ├── CSRConstants.scala
+│   │   │   │   ├── CSRModule.scala
 │   │   │   │   ├── DataMemory.scala
 │   │   │   │   ├── ForwardingUnit.scala
 │   │   │   │   ├── HazardUnit.scala
@@ -44,6 +46,7 @@ RiscV-Processor/
 |           ├── ControlUnitTest.scala
 |           ├── CoreStressTest.scala
 │           ├── CoreTest.scala
+|           ├── CSRTest.scala
 |           ├── HazardTest.scala
 |           ├── JALRTest.scala
 |           ├── JALTest.scala

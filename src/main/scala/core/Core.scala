@@ -29,7 +29,8 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val memIO      = Module(new MemoryMapping()) // Decides RAM or LED (Contains DataMemory)
   val forwarding = Module(new ForwardingUnit())
   val hazard     = Module(new HazardUnit())
-  val serialPort = Module(new Serialport())
+  //val serialPort = Module(new Serialport())
+  val uart       = Module(new BufferedTx(100000000, 115200))
   val csrModule  = Module(new CSRModule())
 
   // ==============================================================================
@@ -73,7 +74,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     val rs2_addr = UInt(5.W)
     val rd_addr  = UInt(5.W)
     val alu_op   = UInt(4.W) // Output of ALUDecoder
-    val tx       = Bool()
+    //val tx       = Bool()
     // Control Signals
     val regWrite = Bool()
     val memWrite = Bool()
@@ -111,7 +112,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     id_ex.rs2_addr := if_id_instr(24, 20)
     id_ex.rd_addr  := if_id_instr(11, 7)
     id_ex.alu_op   := aluDecoder.io.op
-    id_ex.tx       := serialPort.io.tx
+    //id_ex.tx       := serialPort.io.tx
     // Control Signals
     id_ex.regWrite := decode.io.regWrite
     id_ex.memWrite := decode.io.memWrite
@@ -142,7 +143,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     val rd_addr    = UInt(5.W)
     val regWrite   = Bool()
     val memWrite   = Bool()
-    val tx         = Bool()
+    //val tx         = Bool()
     val memToReg   = Bool()
     val pc_plus_4  = UInt(32.W)
     val jump       = Bool()
@@ -250,7 +251,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   ex_mem.rd_addr    := id_ex.rd_addr
   ex_mem.regWrite   := id_ex.regWrite
   ex_mem.memWrite   := id_ex.memWrite
-  ex_mem.tx         := id_ex.tx
+  //ex_mem.tx         := id_ex.tx
   ex_mem.memToReg   := id_ex.memToReg
   ex_mem.pc_plus_4  := id_ex.pc + 4.U
   ex_mem.jump       := id_ex.jump
@@ -266,6 +267,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   // ==============================================================================
 
   // ======== UART START ========
+  /*
   // --- HELPER: 4-bit Hex to ASCII ---
   def nibbleToChar(nibble: UInt): UInt = {
     val n = (nibble & 0xf.U)(3, 0)
@@ -335,6 +337,11 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   serialPort.io.inputString := asciiVec
   serialPort.io.sendTrigger := triggerReg
   io.tx                     := ex_mem.tx
+  */
+  uart.io.channel.valid := memIO.io.uartValid
+  uart.io.channel.bits  := memIO.io.uartData(7, 0) // Send lowest byte
+  
+  io.tx := uart.io.txd
   // ======== UART END ========
 
 
@@ -345,13 +352,19 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   // Read data from memory
   val memReadData = memIO.io.readData
 
+  // --- HANDLE UART STATUS READ ---
+  // If reading from 0x1004, return the UART Ready status (Bit 0)
+  val is_uart_status = (ex_mem.alu_result === 0x1004.U)
+  // Construct status word: Bit 0 is Ready, others 0
+  val uart_status_word = Cat(0.U(31.W), uart.io.channel.ready)
+
   // Select writeback data:
   // Priority: Jump (PC+4) > AUIPC > CSR > Memory > ALU result
   val wb_data = MuxCase(ex_mem.alu_result, Seq(
     ex_mem.jump      -> ex_mem.pc_plus_4,       // JAL/JALR: write PC+4
     ex_mem.auipc     -> (ex_mem.pc + ex_mem.imm), // AUIPC: write PC+imm
     ex_mem.is_csr    -> ex_mem.csr_data,        // ← ADD: CSR: write CSR value
-    ex_mem.memToReg  -> memReadData              // Load: write memory data
+    ex_mem.memToReg  -> Mux(is_uart_status, uart_status_word, memReadData)              // Load: write memory data
   ))
 
 

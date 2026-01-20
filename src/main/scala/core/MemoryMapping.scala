@@ -26,8 +26,10 @@ class MemoryMapping extends Module {
 
   // --- ADDRESS MAPPING ---
   val isLed = (io.address === 100.U)
-  val isUart = (io.address >= 200.U) && (io.address < 400.U) // x00 = 200, x01 = 204, x31 = 324
-  val isRam = !isLed && !isUart // If not an IO then it is RAM (DataMemory)
+  //val isUart = (io.address >= 200.U) && (io.address < 400.U) // x00 = 200, x01 = 204, x31 = 324
+  val isUartData   = (io.address === 0x1000.U)
+  val isUartStatus = (io.address === 0x1004.U)
+  val isRam = !isLed && !isUartData && !isUartStatus
 
   // --- RAM LOGIC ---
   dataMem.io.address   := io.address
@@ -44,7 +46,7 @@ class MemoryMapping extends Module {
   io.led := ledReg // Connecting output
 
   // --- UART LOGIC ---
-  io.uartValid := io.memWrite && isUart
+  io.uartValid := io.memWrite && isUartData
   io.uartAddr  := io.address
   io.uartData  := io.writeData
 }
