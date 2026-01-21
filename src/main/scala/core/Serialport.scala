@@ -145,37 +145,3 @@ class BufferedTx(frequency: Int, baudRate: Int) extends Module {
   tx.io.channel <> buf.io.out
   io.txd <> tx.io.txd
 }
-
-// ====================================================================================
-
-class Serialport extends Module {
-  val io = IO(new Bundle {
-    val inputString = Input(Vec(32, UInt(8.W)))
-    val sendTrigger = Input(Bool())
-    val tx = Output(Bool())
-  })
-
-  val uart = Module(new BufferedTx(100000000, 115200))
-  val strCntReg = RegInit(0.U(5.W))
-  val sending = RegInit(false.B)
-
-  uart.io.channel.valid := false.B
-  uart.io.channel.bits := 0.U
-
-  when(sending) {
-    when(uart.io.channel.ready) {
-      uart.io.channel.valid := true.B
-      uart.io.channel.bits := io.inputString(strCntReg)
-      strCntReg := strCntReg + 1.U
-
-      when(strCntReg === 31.U) {
-      sending := false.B
-      strCntReg := 0.U
-      }
-    }
-  } .elsewhen(io.sendTrigger) {
-    sending := true.B
-  }
-
-  io.tx := uart.io.txd
-}

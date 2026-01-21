@@ -18,7 +18,7 @@ class DataMemory extends Module {
 
   // This tells the synthesis tool to preload RAM with your program/data
   //loadMemoryFromFile(memory, "C:/DTU-local/Repos/RiscV-processor/src/main/resources/prime_bench.mem")
-  loadMemoryFromFileInline(memory, "C:/DTU-local/Repos/RiscV-processor/src/main/resources/prime_bench.mem")
+  //loadMemoryFromFileInline(memory, "C:/DTU-local/Repos/RiscV-processor/src/main/resources/prime_bench.mem")
 
   // Read: Happens constantly (async read for Mem) Syncreadmem instead????
   // Dividing address by 4 as memory is in words, while CPU uses byte-addressing
