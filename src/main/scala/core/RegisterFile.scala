@@ -24,6 +24,16 @@ class RegisterFile extends Module {
     val rd_addr = Input(UInt(5.W))
     val rd_data = Input(UInt(32.W))
     val reg_write = Input(Bool())
+    //Debugging output
+    val debug_x1  = Output(UInt(32.W)) // ra
+    val debug_x2  = Output(UInt(32.W)) // sp
+    val debug_x3  = Output(UInt(32.W))
+    val debug_x4  = Output(UInt(32.W))
+    val debug_x10 = Output(UInt(32.W)) // a0
+    val debug_x11 = Output(UInt(32.W)) // a1
+    val debug_x12 = Output(UInt(32.W)) // a2
+    val debug_x13 = Output(UInt(32.W)) // a3
+    val debug_x14 = Output(UInt(32.W)) // a4
   })
 
 
@@ -62,4 +72,16 @@ class RegisterFile extends Module {
 
   io.rs2_data := Mux(rs2_hazard, io.rd_data, 
                  Mux(io.rs2_addr === 0.U, 0.U, registers(io.rs2_addr)))
+
+  // --- DEBUG OUTPUTS ---
+  // This safely exposes the internal memory to the outside world
+  io.debug_x1  := registers(1)
+  io.debug_x2  := registers(2)
+  io.debug_x3  := registers(3)
+  io.debug_x4  := registers(4)
+  io.debug_x10 := registers(10)
+  io.debug_x11 := registers(11)
+  io.debug_x12 := registers(12)
+  io.debug_x13 := registers(13)
+  io.debug_x14 := registers(14)
 }

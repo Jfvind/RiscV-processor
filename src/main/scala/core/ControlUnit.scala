@@ -1,198 +1,165 @@
-/*
-* Control Unit:
-* Decodes the 32-bit instruction (opcode, funct3, funct7) into control signals.
-* It interprets what the instruction represents and distributes theses signals to the rest
-* of the processor to execute the intended opeation.
-* Type: Pure Combinational logic (Output depends solely on current Input).
-*/
 package core
 
 import chisel3._
 import chisel3.util._
-import core.ALUConstants._
 import core.CSRConstants._
-import core.ControlConstants.{ALU_OP_BRANCH, ALU_OP_ITYPE, ALU_OP_MEM, ALU_OP_RTYPE}
+import core.ALUConstants._
 
 class ControlUnit extends Module {
   val io = IO(new Bundle {
-    val instruction = Input(UInt(32.W))   // Input: Full 32-bit instruction from the Fetch stage
-
-    val regWrite    = Output(Bool())      // Enables writing to the destination register (rd).
-    val aluSrc      = Output(Bool())      // Controls MUX on the input B of the ALU: either (rs2) or (imm)
-    val aluOp       = Output(UInt(2.W))  // prev 4-bit now 2 bit, as ALUDecode is incoorperated.
-    val imm         = Output(UInt(32.W))  // The extracted immediate from the instruction, now extended to 32 bits via sign extension.
-    val memWrite    = Output(Bool())      // Write enable for our data memory (RAM)
-    val branch      = Output(Bool())      // Indicates a branch instruction --> Fetch-state (for PC logic). Combined with ALU result to decide if we jump.
-    val memToReg    = Output(Bool())  // For Load instructions to select data from memory to write to register
-    val jump        = Output(Bool()) //For...... Jumping :D
-    val jumpReg  = Output(Bool())  // (true for JALR, false for JAL)
-    val auipc = Output(Bool())
-    val halt = Output(Bool()) // Ecall
-    val csr_op      = Output(UInt(3.W))   // CSR operation (fra CSRConstants)
-    val csr_src_imm = Output(Bool())      // True hvis immediate-variant (CSRRWI etc.)
-
-    // Nye signaler for at håndtere load-typer (baseret på funct3) og unsigned-flag for LBU/LHU.
-    val loadType      = Output(UInt(3.W))  // Direkte funct3 for load-instruktioner
-    val loadUnsigned  = Output(Bool())     // True for LBU/LHU (zero-extend)
-    // Nyt signal for store-typer (baseret på funct3) til delvis writes (SB/SH/SW).
-    val storeType     = Output(UInt(3.W))  // Direkte funct3 for store-instruktioner
-
+    val instruction = Input(UInt(32.W))
+    val regWrite    = Output(Bool())
+    val aluSrc      = Output(Bool())
+    val aluOp       = Output(UInt(4.W))
+    val imm         = Output(UInt(32.W))
+    val memWrite    = Output(Bool())
+    val branch      = Output(Bool())
+    val memToReg    = Output(Bool())
+    val jump        = Output(Bool())
+    val jumpReg     = Output(Bool())
+    val auipc       = Output(Bool())
+    val halt        = Output(Bool())
+    val csr_op      = Output(UInt(3.W))
+    val csr_src_imm = Output(Bool())
+    val loadType      = Output(UInt(3.W))
+    val loadUnsigned  = Output(Bool())
+    val storeType     = Output(UInt(3.W))
   })
 
-  // ============================================
-  // DECODE INSTRUCTIONS HERE
-  // Slice the 32-bit intstruction into its components (opcode, funct3, etc.)
-    val opcode = io.instruction(6, 0)
-    val funct3 = io.instruction(14,12)
-    //val funct7 = io.instruction(31,25)
-  // ============================================
+  val opcode = io.instruction(6, 0)
+  val funct3 = io.instruction(14, 12)
+  val funct7 = io.instruction(31, 25)
 
-  val immGen = Module(new ImmGen()) // Instantiating the immediate generator
-  immGen.io.instruction := io.instruction // Connecting instruction input to the ImmGen module
+  val immGen = Module(new ImmGen())
+  immGen.io.instruction := io.instruction
 
-  // Default signals: for defined behaviour when being synthesized
-  io.regWrite := false.B
-
-  io.aluSrc   := false.B
-  io.aluOp    := ALU_OP_MEM
-
-  io.memWrite := false.B
-  io.branch   := false.B
-  io.memToReg := false.B
-
-  io.jump     := false.B
-  io.jumpReg := false.B
-  io.auipc := false.B
-
-  io.halt := false.B
-
-  io.csr_op   := CSR_OP_NOP
+  // Default Control Signals
+  io.regWrite    := false.B
+  io.aluSrc      := false.B
+  io.aluOp       := ALU_ADD
+  io.imm         := 0.U
+  io.memWrite    := false.B
+  io.branch      := false.B
+  io.memToReg    := false.B
+  io.jump        := false.B
+  io.jumpReg     := false.B
+  io.auipc       := false.B
+  io.halt        := false.B
+  io.csr_op      := CSR_OP_NOP
   io.csr_src_imm := false.B
-
-  io.loadType := 0.U
+  io.loadType    := funct3
   io.loadUnsigned := false.B
-  io.storeType := 0.U
-
-  io.imm      := immGen.io.imm_i
+  io.storeType   := funct3
+  io.imm         := immGen.io.imm_i
 
   switch(opcode) {
-    // 1. R-Type (add, sub, xor, etc.)
+    // 1. R-Type
     is("b0110011".U) {
-      io.aluOp := ALU_OP_RTYPE // Fortæl ALUDecoder at det er R-type
       io.regWrite := true.B
-      io.aluSrc := false.B // Brug Register (rs2) som input B
-      io.memToReg := false.B
+      val isSub = funct7(5)
+      switch(funct3) {
+        is("b000".U) { io.aluOp := Mux(isSub, ALU_SUB, ALU_ADD) }
+        is("b001".U) { io.aluOp := ALU_SLL }
+        is("b010".U) { io.aluOp := ALU_SLT }
+        is("b011".U) { io.aluOp := ALU_SLTU }
+        is("b100".U) { io.aluOp := ALU_XOR }
+        is("b101".U) { io.aluOp := Mux(isSub, ALU_SRA, ALU_SRL) }
+        is("b110".U) { io.aluOp := ALU_OR }
+        is("b111".U) { io.aluOp := ALU_AND }
+      }
     }
-
-    // 2. I-Type Arithmetic (addi, etc.)
+    // 2. I-Type
     is("b0010011".U) {
-      io.aluOp := ALU_OP_ITYPE // ALUDecode
       io.regWrite := true.B
-      io.aluSrc := true.B // Brug Immediate som input B
-      io.memToReg := false.B
-      io.imm := immGen.io.imm_i
+      io.aluSrc   := true.B
+      io.imm      := immGen.io.imm_i
+      val isSRA = funct7(5)
+      switch(funct3) {
+        is("b000".U) { io.aluOp := ALU_ADD }
+        is("b001".U) { io.aluOp := ALU_SLL }
+        is("b010".U) { io.aluOp := ALU_SLT }
+        is("b011".U) { io.aluOp := ALU_SLTU }
+        is("b100".U) { io.aluOp := ALU_XOR }
+        is("b101".U) { io.aluOp := Mux(isSRA, ALU_SRA, ALU_SRL) }
+        is("b110".U) { io.aluOp := ALU_OR }
+        is("b111".U) { io.aluOp := ALU_AND }
+      }
     }
-
-    // 3. Load (lw)
+    // 3. Load
     is("b0000011".U) {
-      io.aluOp := ALU_OP_MEM // Vi skal lægge sammen (Base + Offset)
-      io.regWrite := true.B // Vi skriver data fra memory til register
-      io.aluSrc := true.B // Adresse offset er immediate
-      io.memToReg := true.B //Mem not ALU
-      io.imm := immGen.io.imm_i
-      //Memread
-      io.loadType := funct3
-      io.loadUnsigned := (funct3(2) === 1.U)  // Bit 2=1 for unsigned loads (100=LBU, 101=LHU)
+      io.regWrite := true.B
+      io.aluSrc   := true.B
+      io.memToReg := true.B
+      io.aluOp    := ALU_ADD
+      io.imm      := immGen.io.imm_i
+      when(funct3 === "b100".U || funct3 === "b101".U) {
+        io.loadUnsigned := true.B
+      }
     }
-
-    // 4. Store (sw) - S-Type
+    // 4. Store
     is("b0100011".U) {
-      io.aluOp := ALU_OP_MEM // Vi skal lægge sammen (Base + Offset)
       io.memWrite := true.B
-      io.aluSrc := true.B // Adresse offset er immediate
-      io.regWrite := false.B // Stores returnerer ikke noget til register
-      io.memToReg := false.B
-      io.imm := immGen.io.imm_s
-      io.storeType := funct3
+      io.aluSrc   := true.B
+      io.aluOp    := ALU_ADD
+      io.imm      := immGen.io.imm_s
     }
-
-    // 5. Branch (beq, bne, etc.) - B-Type
+    // 5. Branch
     is("b1100011".U) {
-      io.aluOp := ALU_OP_BRANCH // Fortæl ALUDecoder at lave sammenligning
-      io.branch := true.B
-      io.aluSrc := false.B // Branches sammenligner Reg vs Reg
-      io.regWrite := false.B
-      io.memToReg := false.B
-      io.imm := immGen.io.imm_b
+      io.branch   := true.B
+      io.aluOp    := ALU_SUB
+      io.imm      := immGen.io.imm_b
     }
-
-    // 6. LUI (Load Upper Immediate)
+    // 6. LUI
     is("b0110111".U) {
-      io.aluOp := ALU_OP_MEM
       io.regWrite := true.B
-      io.aluSrc := true.B
-      io.memToReg := false.B
-      io.imm := immGen.io.imm_u
+      io.aluSrc   := true.B
+      // FIX: Use COPY_B to ignore rs1 input
+      io.aluOp    := ALU_COPY_B
+      io.imm      := immGen.io.imm_u
     }
-    // JAL (Jump and Link) - J-Type
-    is("b1101111".U) {
-      io.jump := true.B
-      io.jumpReg := false.B
-      io.regWrite := true.B // Write PC+4 to rd
-      io.aluSrc := true.B // Use immediate (not used for jump calc)
-      io.memToReg := false.B // Write back PC+4, not memory
-      io.imm := immGen.io.imm_j
-    }
-    // JALR (Jump and Link Register) - I-Type
-    is("b1100111".U) {
-      io.jump := true.B
-      io.jumpReg := true.B
-      io.regWrite := true.B
-      io.aluSrc := true.B // Use immediate
-      io.memToReg := false.B
-      io.imm := immGen.io.imm_i
-    }
-    // AUIPC
+    // 7. AUIPC
     is("b0010111".U) {
       io.regWrite := true.B
-      io.aluSrc := true.B
-      io.memToReg := false.B
-      io.auipc := true.B
-      io.imm := immGen.io.imm_u
+      io.aluSrc   := true.B
+      io.auipc    := true.B
+      io.aluOp    := ALU_ADD
+      io.imm      := immGen.io.imm_u
     }
-    // FENCE - Memory ordering (NOP for single-core)
-    is("b0001111".U) {
-      // Leave all signals at default (false)
-      // No register write, no memory access, no jumps
-      // Instruction advances through pipeline but does nothing
-      // BAsically a NOP in this simple one-core
+    // 8. JAL
+    is("b1101111".U) {
+      io.regWrite := true.B
+      io.jump     := true.B
+      io.imm      := immGen.io.imm_j
     }
-    // SYSTEM (ECALL, EBREAK, CSR)
+    // 9. JALR
+    is("b1100111".U) {
+      io.regWrite := true.B
+      io.jump     := true.B
+      io.jumpReg  := true.B
+      io.aluSrc   := true.B
+      io.imm      := immGen.io.imm_i
+      io.aluOp    := ALU_ADD
+    }
+    // 10. FENCE
+    is("b0001111".U) { }
+    // 11. SYSTEM
     is("b1110011".U) {
-      val funct12_bit20 = io.instruction(20) // For ECALL/EBREAK
-
+      val funct12_bit20 = io.instruction(20)
       when(funct3 === 0.U) {
-        // ECALL/EBREAK (ingen CSR)
-        when(funct12_bit20 === 0.U) {
-          io.halt := true.B // ECALL
-        } .elsewhen(funct12_bit20 === 1.U) {
-          io.halt := true.B // EBREAK
-        }
+        when(funct12_bit20 === 0.U) { io.halt := true.B }
+          .elsewhen(funct12_bit20 === 1.U) { io.halt := true.B }
       } .otherwise {
-        // CSR-instructions (funct3 1-6)
-        io.regWrite := true.B     // Skriv gammel CSR til rd
-        io.memToReg := false.B    // Resultat fra CSR, ikke mem
-        io.aluOp    := ALU_OP_MEM // Brug ALU til add/or/and for modify (vi genbruger ALU til CSR ops)
-        io.csr_op   := funct3     // Direkte fra funct3 (1=RRW, 2=RRS, etc.)
-
-        // Immediate-variant hvis funct3 >=4
+        io.regWrite := true.B
+        io.memToReg := false.B
+        io.aluOp    := ALU_ADD
+        io.csr_op   := funct3
         when(funct3 >= 4.U) {
           io.csr_src_imm := true.B
-          io.aluSrc := true.B     // Brug imm (zimm)
-          io.imm := Cat(0.U(27.W), io.instruction(19,15))  // Unsigned 5-bit zimm, zero-extended (override immGen for simplicitet)
+          io.aluSrc := true.B
+          io.imm := Cat(0.U(27.W), io.instruction(19,15))
         } .otherwise {
           io.csr_src_imm := false.B
-          io.aluSrc := false.B    // Brug rs1 (register)
+          io.aluSrc := false.B
         }
       }
     }

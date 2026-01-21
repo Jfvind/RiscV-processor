@@ -40,7 +40,6 @@ RiscV-Processor/
 │   │   └── resources/         # Hex files for instruction memory initialization
 │   └── test/
 │       └── scala/             # Unit tests for your modules
-|           ├── ALUDecoderTest.scala
 │           ├── ALUTest.scala
 |           ├── AUIPCTest.scala
 |           ├── ControlUnitTest.scala

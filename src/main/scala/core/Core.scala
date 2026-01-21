@@ -18,6 +18,30 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
 
     // Uart prod
     val tx          = Output(Bool())
+
+    // ==================================================================
+    // Debug Access Ports (Required for Diagnostic Tests)
+    // ==================================================================
+    val debug_x1    = Output(UInt(32.W)) // ra
+    val debug_x2    = Output(UInt(32.W)) // sp
+    val debug_x3    = Output(UInt(32.W))
+    val debug_x4    = Output(UInt(32.W))
+    val debug_x10   = Output(UInt(32.W)) // a0
+    val debug_x11   = Output(UInt(32.W)) // a1
+    val debug_x12   = Output(UInt(32.W)) // a2
+    val debug_x13   = Output(UInt(32.W)) // a3
+    val debug_x14   = Output(UInt(32.W)) // a4
+
+    // Debug Access to Pipeline State
+    val debug_stall        = Output(Bool())
+    val debug_flush        = Output(Bool())
+    val debug_forwardA     = Output(UInt(2.W))
+    val debug_forwardB     = Output(UInt(2.W))
+    val debug_branch_taken = Output(Bool())
+
+    // Debug Access to CSRs
+    val debug_mcycle       = Output(UInt(32.W))
+    // ==================================================================
   })
 
   // Instantiate Modules
@@ -25,19 +49,20 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val decode     = Module(new ControlUnit())   // Contains ImmGen
   val regFile    = Module(new RegisterFile())
   val alu        = Module(new ALU())           // Contains ALUConstants
-  val aluDecoder = Module(new ALUDecoder())
+  //val aluDecoder = Module(new ALUDecoder())
   val memIO      = Module(new MemoryMapping()) // Decides RAM or LED (Contains DataMemory)
   val forwarding = Module(new ForwardingUnit())
   val hazard     = Module(new HazardUnit())
   //val serialPort = Module(new Serialport())
   val uart       = Module(new BufferedTx(100000000, 115200))
+  //val uart         = Module(new BufferedTx(100000000, 10000000)) // For faster simulation TODO: Change back to 115200 for real use
   val csrModule  = Module(new CSRModule())
   val branchPredictor = Module(new BranchPredictor())
 
   // ==============================================================================
   // IF STAGE (Instruction Fetch)
   // ==============================================================================
-  
+
   // IF/ID Pipeline Register
   val if_id_pc    = RegInit(0.U(32.W))
   val if_id_instr = RegInit(0.U(32.W))
@@ -57,9 +82,9 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   // ==============================================================================
   // ID STAGE (Instruction Decode)
   // ==============================================================================
-  
+
   decode.io.instruction := if_id_instr
-  
+
   // Register File Read
   regFile.io.rs1_addr := if_id_instr(19, 15)
   regFile.io.rs2_addr := if_id_instr(24, 20)
@@ -81,7 +106,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     val memWrite = Bool()
     val branch   = Bool()
     val aluSrc   = Bool()
-    //val aluOp    = UInt(4.W) // Input of 
+    //val aluOp    = UInt(4.W) // Input of
     val funct3   = UInt(3.W)
     val funct7   = UInt(7.W)
     val memToReg = Bool()
@@ -100,11 +125,6 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
-  // ALUDecoder
-  aluDecoder.io.aluOp  := decode.io.aluOp   // 2-bit fra Control Unit
-  aluDecoder.io.funct3 := if_id_instr(14, 12)  // 3-bit fra instruktion
-  aluDecoder.io.funct7 := if_id_instr(31, 25)  // 7-bit fra instruktion
-
   // Update ID/EX Register
   when(hazard.io.flush || hazard.io.stall) {
     id_ex := 0.U.asTypeOf(new ID_EX_Bundle)
@@ -116,7 +136,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     id_ex.rs1_addr := if_id_instr(19, 15)
     id_ex.rs2_addr := if_id_instr(24, 20)
     id_ex.rd_addr  := if_id_instr(11, 7)
-    id_ex.alu_op   := aluDecoder.io.op
+    id_ex.alu_op   := decode.io.aluOp
     //id_ex.tx       := serialPort.io.tx
     // Control Signals
     id_ex.regWrite := decode.io.regWrite
@@ -177,6 +197,8 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   }
   val mem_wb = RegInit(0.U.asTypeOf(new MEM_WB_Bundle))
 
+  val wb_data = Wire(UInt(32.W))
+
   // --- Forwarding Logic ---
   forwarding.io.id_ex_rs1       := id_ex.rs1_addr
   forwarding.io.id_ex_rs2       := id_ex.rs2_addr
@@ -200,7 +222,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
 
   // ALU Connections
   alu.io.alu_op := id_ex.alu_op
-  alu.io.alu_a  := forwardA_data
+  alu.io.alu_a  := Mux(id_ex.auipc, id_ex.pc, forwardA_data)
   alu.io.alu_b  := Mux(id_ex.aluSrc, id_ex.imm, forwardB_data)
 
   // === CSR Module Connections ===
@@ -302,7 +324,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   // ======== UART START ========
   uart.io.channel.valid := memIO.io.uartValid
   uart.io.channel.bits  := memIO.io.uartData(7, 0) // Send lowest byte
-  
+
   io.tx := uart.io.txd
   // ======== UART END ========
 
@@ -322,11 +344,12 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   // If reading from 0x1004, return the UART Ready status (Bit 0)
   val is_uart_status = (ex_mem.alu_result === 0x1004.U)
   // Construct status word: Bit 0 is Ready, others 0
+  //val uart_status_word = 1.U(32.W) //For testing, always ready
   val uart_status_word = Cat(0.U(31.W), uart.io.channel.ready)
 
   // Select writeback data:
   // Priority: Jump (PC+4) > AUIPC > CSR > Memory > ALU result
-  val wb_data = MuxCase(ex_mem.alu_result, Seq(
+  wb_data := MuxCase(ex_mem.alu_result, Seq(
     ex_mem.jump      -> ex_mem.pc_plus_4,       // JAL/JALR: write PC+4
     ex_mem.auipc     -> (ex_mem.pc + ex_mem.imm), // AUIPC: write PC+imm
     ex_mem.is_csr    -> ex_mem.csr_data,        // ← ADD: CSR: write CSR value
@@ -358,4 +381,29 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   io.uartData    := memIO.io.uartData
   io.uartAddr    := memIO.io.uartAddr
   io.uartValid   := memIO.io.uartValid
+
+  // ==================================================================
+  // Connections for Debug Ports
+  // ==================================================================
+
+  // 1. Connect Registers (FIXED: Use IO ports, not internal memory)
+  io.debug_x1  := regFile.io.debug_x1
+  io.debug_x2  := regFile.io.debug_x2
+  io.debug_x3  := regFile.io.debug_x3
+  io.debug_x4  := regFile.io.debug_x4
+  io.debug_x10 := regFile.io.debug_x10
+  io.debug_x11 := regFile.io.debug_x11
+  io.debug_x12 := regFile.io.debug_x12
+  io.debug_x13 := regFile.io.debug_x13
+  io.debug_x14 := regFile.io.debug_x14
+
+  // 2. Connect Pipeline Info
+  io.debug_stall        := hazard.io.stall
+  io.debug_flush        := hazard.io.flush
+  io.debug_forwardA     := forwarding.io.forwardA
+  io.debug_forwardB     := forwarding.io.forwardB
+  io.debug_branch_taken := pc_change
+
+  // 3. Connect CSR Info
+  io.debug_mcycle       := csrModule.io.csr_data_out
 }
