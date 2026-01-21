@@ -192,6 +192,54 @@ object Programs {
     "hfe0050e3".U(32.W)  // 48: bge x0, x0, -32     (goto 16)
   )
 
+  // Program 2e: simpleLoop - Absolute minimum loop test
+  // Just toggles LED and jumps back - no delays
+  // If LED appears constantly ON (blinking too fast), loop works!
+  val simpleLoop = Seq(
+    // --- SETUP ---
+    "h00100093".U(32.W), //  0: addi x1, x0, 1      (x1 = 1)
+    "h00000113".U(32.W), //  4: addi x2, x0, 0      (x2 = 0)
+    "h06400193".U(32.W), //  8: addi x3, x0, 100    (x3 = LED addr)
+    
+    // --- LOOP START --- Address 12
+    "h0011a023".U(32.W), // 12: sw x1, 0(x3)        (LED ON)
+    "h0021a023".U(32.W), // 16: sw x2, 0(x3)        (LED OFF)
+    
+    // Jump back: PC=20, target=12, offset=-8
+    // BGE x0, x0, -8: funct3=101 (not 000!)
+    // Correct encoding: 0xFE005CE3
+    "hfe005ce3".U(32.W)  // 20: bge x0, x0, -8      (goto 12)
+  )
+
+  // Program 2f: ledOnOnly - Absolute minimum: just turn LED on and halt
+  // If LED doesn't turn on, there's a fundamental issue
+  val ledOnOnly = Seq(
+    "h00100093".U(32.W), //  0: addi x1, x0, 1      (x1 = 1)
+    "h06400193".U(32.W), //  4: addi x3, x0, 100    (x3 = LED addr)
+    "h0011a023".U(32.W), //  8: sw x1, 0(x3)        (LED ON!)
+    "h00000073".U(32.W)  // 12: ecall               (halt)
+  )
+
+  // Program 2g: ledOnOnly2 - Test if SW works at address 12
+  // Same as ledOnOnly but with NOP to push SW to address 12
+  val ledOnOnly2 = Seq(
+    "h00100093".U(32.W), //  0: addi x1, x0, 1      (x1 = 1)
+    "h00000013".U(32.W), //  4: nop (addi x0, x0, 0)
+    "h06400193".U(32.W), //  8: addi x3, x0, 100    (x3 = LED addr)
+    "h0011a023".U(32.W), // 12: sw x1, 0(x3)        (LED ON!)
+    "h00000073".U(32.W)  // 16: ecall               (halt)
+  )
+
+  // Program 2h: simpleLoop2 - Same setup as simpleLoop but halts after first SW
+  // Tests if the "addi x2" instruction causes the problem
+  val simpleLoop2 = Seq(
+    "h00100093".U(32.W), //  0: addi x1, x0, 1      (x1 = 1)
+    "h00000113".U(32.W), //  4: addi x2, x0, 0      (x2 = 0) ← different from ledOnOnly2
+    "h06400193".U(32.W), //  8: addi x3, x0, 100    (x3 = LED addr)
+    "h0011a023".U(32.W), // 12: sw x1, 0(x3)        (LED ON!)
+    "h00000073".U(32.W)  // 16: ecall               (halt)
+  )
+
 
   // Program 2c: Minimal UART Test - Just sends 'A' repeatedly (no status polling)
   // This is the simplest possible UART test to verify basic functionality
