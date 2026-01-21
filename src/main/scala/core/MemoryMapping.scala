@@ -39,9 +39,6 @@ class MemoryMapping extends Module {
   val isUartStatus = (io.address === 0x1004.U)
   val isUart       = isUartData || isUartStatus
 
-  // Fra feature/unified-memory: Find ud af om vi skriver til I-mem (0x8000 og op)
-  val isImemWrite  = (io.address >= 0x8000.U)
-
   // --- RAM LOGIC ---
   // Vi skriver kun til DataMemory (LUT-RAM), hvis det IKKE er LED, UART eller I-MEM
   val isRam = !isLed && !isUart && !isImemWrite

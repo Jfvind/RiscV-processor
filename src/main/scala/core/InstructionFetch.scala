@@ -62,6 +62,11 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   // We need the next adress to start reading from SyncReadMem now, so that the next instr is ready in the next clockcycle.
   // If branch_taken is true, we jump. Otherwise, we move to the next instruction (PC + 4).
   //val next_pc = Mux(io.branch_taken, io.jump_target_pc, pc + 4.U)
+  // MuxCase vælger den første 'true' condition fra toppen af listen.
+    val next_pc = MuxCase(pc + 4.U, Seq(
+      io.branch_taken  -> io.jump_target_pc,   // 1. Prioritet: Faktisk branch/jump
+      io.predict_taken -> io.predicted_target  // 2. Prioritet: Forudsigelse
+    ))
   
   // Check if we've reached the end of the program
   when(!halted && pc >= maxPC - 4.U) {
@@ -70,11 +75,6 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   
   // PC update logic
   when(!halted && !io.stall) {
-    // MuxCase vælger den første 'true' condition fra toppen af listen.
-    val next_pc = MuxCase(pc + 4.U, Seq(
-      io.branch_taken  -> io.jump_target_pc,   // 1. Prioritet: Faktisk branch/jump
-      io.predict_taken -> io.predicted_target  // 2. Prioritet: Forudsigelse
-    ))
     pc := next_pc
   }
   // If halted, PC doesn't change (stays at last instruction)

@@ -67,6 +67,18 @@ RiscV-Processor/
 - SBT (Scala Build Tool) 1.9.7 or higher
 - Java 8 or higher
 
+## Build process
+```bash
+# Create .sv file in generated/
+sbt run 
+```
+- Import as design source in Vivado.
+- Import .mem file as design source in Vivado
+```TCL console
+set_property verilog_define {ENABLE_INITIAL_MEM_=1} [current_fileset]
+```
+- Run write bitstream in Vivado
+
 ### Commands
 
 ```bash
