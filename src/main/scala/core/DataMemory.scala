@@ -18,8 +18,8 @@ class DataMemory extends Module {
     val storeType     = Input(UInt(3.W))
   })
 
-  // 16KB memory
-  val memory = Mem(17500, UInt(32.W)) // Convert to Syncreadmem????
+  // 32KB memory
+  val memory = Mem(8192, UInt(32.W)) // Convert to Syncreadmem????
 
   // This tells the synthesis tool to preload RAM with your program/data
 
