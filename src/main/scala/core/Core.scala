@@ -189,13 +189,13 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val forwardA_data = MuxLookup(forwarding.io.forwardA, id_ex.rs1_data)(Seq(
     0.U -> id_ex.rs1_data,
     1.U -> mem_wb.result,      // Forward from WB
-    2.U -> ex_mem.alu_result   // Forward from MEM
+    2.U -> wb_data   // Forward from MEM
   ))
 
   val forwardB_data = MuxLookup(forwarding.io.forwardB, id_ex.rs2_data)(Seq(
     0.U -> id_ex.rs2_data,
     1.U -> mem_wb.result,
-    2.U -> ex_mem.alu_result
+    2.U -> wb_data
   ))
 
   // ALU Connections
