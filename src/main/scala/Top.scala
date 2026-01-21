@@ -19,8 +19,10 @@ class Top extends Module {
   //val core = Module(new Core(Programs.ledTest))
   //val core = Module(new Core(Programs.ledOnOnly))
   //val core = Module(new Core(Programs.ledOnOnly2))
-  val core = Module(new Core(Programs.simpleLoop2))
+  //val core = Module(new Core(Programs.simpleLoop2))
   
+  // Otherwise we use a filepath: e.g. when running the prime_benchmark
+  val core = Module(new Core(programFile = "test_mem_loading_led.mem"))
   // --- LED INSTANTIATION/CONNECTION ---
   io.led := core.io.led
 

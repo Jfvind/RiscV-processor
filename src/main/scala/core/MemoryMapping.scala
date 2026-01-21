@@ -19,17 +19,36 @@ class MemoryMapping extends Module {
 
     // Uart prod
     val uartValid = Output(Bool())
+
+    // Signlas for instructionFetch
+    val imemWriteEn = Output(Bool())
+    val imemWriteAddr = Output(UInt(32.W))
   })
 
   // Instantiate real DataMemory (RAM)
   val dataMem = Module(new DataMemory())
 
   // --- ADDRESS MAPPING ---
+  // We define everything form 0x8000 and up is for Instruction-mem
+  val isImemWrite = (io.address >= 0x8000.U)
+
   val isLed = (io.address === 100.U)
-  //val isUart = (io.address >= 200.U) && (io.address < 400.U) // x00 = 200, x01 = 204, x31 = 324
+  
+  // Fra main: Specifikke adresser til UART (meget mere stabilt end et range)
   val isUartData   = (io.address === 0x1000.U)
   val isUartStatus = (io.address === 0x1004.U)
-  val isRam = !isLed && !isUartData && !isUartStatus
+  val isUart       = isUartData || isUartStatus
+
+  // Fra feature/unified-memory: Find ud af om vi skriver til I-mem (0x8000 og op)
+  val isImemWrite  = (io.address >= 0x8000.U)
+
+  // --- RAM LOGIC ---
+  // Vi skriver kun til DataMemory (LUT-RAM), hvis det IKKE er LED, UART eller I-MEM
+  val isRam = !isLed && !isUart && !isImemWrite
+
+  // --- I-MEM LOGIC (Unified Memory) ---
+  io.imemWriteEn   := io.memWrite && isImemWrite
+  io.imemWriteAddr := io.address - 0x8000.U
 
   // --- RAM LOGIC ---
   dataMem.io.address   := io.address
