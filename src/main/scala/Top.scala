@@ -13,8 +13,10 @@ class Top extends Module {
   // --- CORE INSTANTIATION ---
   // val core = Module(new Core(programFile = "src/main/resources/prime_bench.mem"))
   // val core = Module(new Core(Programs.primeBench))
-  val core = Module(new Core(Programs.blinkLED2))
+  //val core = Module(new Core(Programs.blinkLED2))
+  val core = Module(new Core(Programs.blinkLED3))
   //val core = Module(new Core(Programs.uartTest))
+  //val core = Module(new Core(Programs.ledTest))
   
   // --- LED INSTANTIATION/CONNECTION ---
   io.led := core.io.led

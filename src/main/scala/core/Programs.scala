@@ -127,6 +127,72 @@ object Programs {
     "hfa0050e3".U(32.W)  // 96: bge x0, x0, -96     (Jump back to 32)
   )
 
+  // Program 2c: blinkLED3 - LED blink + UART without status polling (debug version)
+  // Uses fixed delays instead of polling to isolate UART status issue
+  val blinkLED3 = Seq(
+    // --- SETUP ---
+    "h00100093".U(32.W), //  0: addi x1, x0, 1      (x1 = 1, LED ON)
+    "h00000113".U(32.W), //  4: addi x2, x0, 0      (x2 = 0, LED OFF)
+    "h06400193".U(32.W), //  8: addi x3, x0, 100    (x3 = 100, LED Address)
+    "h00001337".U(32.W), // 12: lui x6, 1           (x6 = 0x1000, UART Address)
+    "h03100393".U(32.W), // 16: addi x7, x0, 0x31   (x7 = '1')
+    "h03000e13".U(32.W), // 20: addi x28, x0, 0x30  (x28 = '0')
+    
+    // --- LOOP START --- Address 24
+    // === Turn LED ON and send '1' ===
+    "h0011a023".U(32.W), // 24: sw x1, 0(x3)        (LED ON)
+    "h00732023".U(32.W), // 28: sw x7, 0(x6)        (UART = '1')
+    
+    // --- LONG DELAY (wait for UART transmission ~10000 cycles) ---
+    "h00000213".U(32.W), // 32: addi x4, x0, 0      (x4 = 0)
+    "h40000293".U(32.W), // 36: addi x5, x0, 1024   (x5 = 1024)
+    "h00120213".U(32.W), // 40: addi x4, x4, 1      (x4++)
+    "hfe52dee3".U(32.W), // 44: bge x5, x4, -4      (loop to 40)
+    
+    // === Turn LED OFF and send '0' ===
+    "h0021a023".U(32.W), // 48: sw x2, 0(x3)        (LED OFF)
+    "h01c32023".U(32.W), // 52: sw x28, 0(x6)       (UART = '0')
+    
+    // --- LONG DELAY ---
+    "h00000213".U(32.W), // 56: addi x4, x0, 0      (x4 = 0)
+    "h40000293".U(32.W), // 60: addi x5, x0, 1024   (x5 = 1024)
+    "h00120213".U(32.W), // 64: addi x4, x4, 1      (x4++)
+    "hfe52dee3".U(32.W), // 68: bge x5, x4, -4      (loop to 64)
+    
+    // --- REPEAT ---
+    "hfc0050e3".U(32.W)  // 72: bge x0, x0, -64     (jump to 24)
+  )
+
+  // Program 2d: ledTest - Minimal LED blink (no UART)  
+  // Tests: SW, ADDI, LUI, and BLT/BGE branches
+  val ledTest = Seq(
+    // --- SETUP ---
+    "h00100093".U(32.W), //  0: addi x1, x0, 1      (x1 = 1, LED ON)
+    "h00000113".U(32.W), //  4: addi x2, x0, 0      (x2 = 0, LED OFF)  
+    "h06400193".U(32.W), //  8: addi x3, x0, 100    (x3 = 100, LED Address)
+    "h001002b7".U(32.W), // 12: lui x5, 256         (x5 = 0x100000 = ~1M delay)
+    
+    // --- LOOP START --- Address 16
+    "h0011a023".U(32.W), // 16: sw x1, 0(x3)        (LED ON)
+    
+    // --- DELAY 1 ---
+    "h00000213".U(32.W), // 20: addi x4, x0, 0      (x4 = 0)
+    "h00120213".U(32.W), // 24: addi x4, x4, 1      (x4++)
+    "hfe524ee3".U(32.W), // 28: blt x4, x5, -4      (if x4 < x5, goto 24)
+
+    // --- LED OFF ---
+    "h0021a023".U(32.W), // 32: sw x2, 0(x3)        (LED OFF)
+    
+    // --- DELAY 2 ---
+    "h00000213".U(32.W), // 36: addi x4, x0, 0      (x4 = 0)
+    "h00120213".U(32.W), // 40: addi x4, x4, 1      (x4++)
+    "hfe524ee3".U(32.W), // 44: blt x4, x5, -4      (if x4 < x5, goto 40)
+
+    // --- LOOP BACK (PC=48, target=16, offset=-32) ---
+    "hfe0050e3".U(32.W)  // 48: bge x0, x0, -32     (goto 16)
+  )
+
+
   // Program 2c: Minimal UART Test - Just sends 'A' repeatedly (no status polling)
   // This is the simplest possible UART test to verify basic functionality
   val uartTest = Seq(
