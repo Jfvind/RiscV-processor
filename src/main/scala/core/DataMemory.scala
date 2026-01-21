@@ -1,6 +1,8 @@
 package core
 
 import chisel3._
+//import chisel3.util.experimental.loadMemoryFromFile
+import chisel3.util.experimental.loadMemoryFromFileInline
 
 class DataMemory extends Module {
   val io = IO(new Bundle {
@@ -12,7 +14,11 @@ class DataMemory extends Module {
   })
 
   // 16KB memory
-  val memory = Mem(4096, UInt(32.W)) // Convert to Syncreadmem????
+  val memory = Mem(17500, UInt(32.W)) // Convert to Syncreadmem????
+
+  // This tells the synthesis tool to preload RAM with your program/data
+  //loadMemoryFromFile(memory, "C:/DTU-local/Repos/RiscV-processor/src/main/resources/prime_bench.mem")
+  loadMemoryFromFileInline(memory, "C:/DTU-local/Repos/RiscV-processor/src/main/resources/prime_bench.mem")
 
   // Read: Happens constantly (async read for Mem) Syncreadmem instead????
   // Dividing address by 4 as memory is in words, while CPU uses byte-addressing

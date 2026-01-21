@@ -11,8 +11,15 @@ class Top extends Module {
   }) // The debug outputs from Core are left unconnected (ignored)
 
   // --- CORE INSTANTIATION ---
-  // The line below can be uncommented to run a specific program from Programs file
-  // val core = Module(new Core(Programs.uartPipelineTest)) // DONT DELETE: Programs.??? controls what program is syntezised to FPGA
+  // val core = Module(new Core(programFile = "src/main/resources/prime_bench.mem"))
+  // val core = Module(new Core(Programs.primeBench))
+  //val core = Module(new Core(Programs.blinkLED2))
+  //val core = Module(new Core(Programs.blinkLED3))
+  //val core = Module(new Core(Programs.uartTest))
+  //val core = Module(new Core(Programs.ledTest))
+  //val core = Module(new Core(Programs.ledOnOnly))
+  //val core = Module(new Core(Programs.ledOnOnly2))
+  //val core = Module(new Core(Programs.simpleLoop2))
   
   // Otherwise we use a filepath: e.g. when running the prime_benchmark
   val core = Module(new Core(programFile = "test_mem_loading_led.mem"))

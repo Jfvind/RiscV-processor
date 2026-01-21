@@ -33,13 +33,20 @@ class MemoryMapping extends Module {
   val isImemWrite = (io.address >= 0x8000.U)
 
   val isLed = (io.address === 100.U)
-  val isUart = (io.address >= 200.U) && (io.address < 400.U) // x00 = 200, x01 = 204, x31 = 324
+  
+  // Fra main: Specifikke adresser til UART (meget mere stabilt end et range)
+  val isUartData   = (io.address === 0x1000.U)
+  val isUartStatus = (io.address === 0x1004.U)
+  val isUart       = isUartData || isUartStatus
 
-  // We need to ensure that we wont write to Datamem, if we are trying to write to
-  // I-mem, LED or UART
-  val isRam = !isLed && !isUart && !isImemWrite // If not an IO nor Imem, then it is RAM (DataMemory)
+  // Fra feature/unified-memory: Find ud af om vi skriver til I-mem (0x8000 og op)
+  val isImemWrite  = (io.address >= 0x8000.U)
 
-  // --- I-MEM LOGIC ---
+  // --- RAM LOGIC ---
+  // Vi skriver kun til DataMemory (LUT-RAM), hvis det IKKE er LED, UART eller I-MEM
+  val isRam = !isLed && !isUart && !isImemWrite
+
+  // --- I-MEM LOGIC (Unified Memory) ---
   io.imemWriteEn   := io.memWrite && isImemWrite
   io.imemWriteAddr := io.address - 0x8000.U
 
@@ -58,7 +65,7 @@ class MemoryMapping extends Module {
   io.led := ledReg // Connecting output
 
   // --- UART LOGIC ---
-  io.uartValid := io.memWrite && isUart
+  io.uartValid := io.memWrite && isUartData
   io.uartAddr  := io.address
   io.uartData  := io.writeData
 }
