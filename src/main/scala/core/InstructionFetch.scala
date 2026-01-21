@@ -15,6 +15,10 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
     val stall          = Input(Bool())
     val halt           = Input(Bool())  // Halt signal to stop fetching instructions
 
+    //BRanch prediction inputs
+    val predict_taken     = Input(Bool())
+    val predicted_target  = Input(UInt(32.W))
+
     // Outputs to the Decode Stage
     val pc             = Output(UInt(32.W)) // Current PC (needed for jumps)
     val instruction    = Output(UInt(32.W)) // The fetched instruction
@@ -53,9 +57,13 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
 
   // Program Counter Register
   val pc = RegInit(0.U(32.W))
-  // Halt mechanism to prevent PC from running beyond program
-  val maxPC = (romSize * 4).U
   val halted = RegInit(false.B)
+  // Halt mechanism to prevent PC from running beyond program
+  val maxPC = if (program.nonEmpty) (program.length * 4).U else 0x1000.U
+
+  when(io.halt) {
+    halted := true.B
+  }
   
   // Check if we've reached the end of the program
   when(!halted && pc >= maxPC - 4.U) {
@@ -64,11 +72,12 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   
   // PC update logic
   when(!halted && !io.stall) {
-    // If branch_taken is true, we jump. Otherwise, we move to the next instruction (PC + 4).
-    val next_pc = Mux(io.branch_taken, io.jump_target_pc, pc + 4.U)
+    // MuxCase vælger den første 'true' condition fra toppen af listen.
+    val next_pc = MuxCase(pc + 4.U, Seq(
+      io.branch_taken  -> io.jump_target_pc,   // 1. Prioritet: Faktisk branch/jump
+      io.predict_taken -> io.predicted_target  // 2. Prioritet: Forudsigelse
+    ))
     pc := next_pc
-  }.elsewhen(io.halt) {
-    halted := true.B
   }
   // If halted, PC doesn't change (stays at last instruction)
 
@@ -85,7 +94,8 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   val fetchedInstr = Mux(is_valid_addr,
     rom(safeIndex),
     0x00000013.U) // NOP
-  
+
+  // Output the fetched instruction (or NOP if halted)
   io.instruction := Mux(halted, 0x00000013.U, fetchedInstr)
 
   // Output the current PC

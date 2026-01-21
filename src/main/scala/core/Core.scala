@@ -32,6 +32,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   //val serialPort = Module(new Serialport())
   val uart       = Module(new BufferedTx(100000000, 115200))
   val csrModule  = Module(new CSRModule())
+  val branchPredictor = Module(new BranchPredictor())
 
   // ==============================================================================
   // IF STAGE (Instruction Fetch)
@@ -229,15 +230,27 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     id_ex.pc + id_ex.imm                  // JAL:  PC + imm
   )
 
+  // Update Branch Predictor
+  branchPredictor.io.update_valid  := true.B
+  branchPredictor.io.update_pc     := id_ex.pc
+  branchPredictor.io.update_taken  := pc_change
+  branchPredictor.io.update_target := jump_target
+  branchPredictor.io.is_branch     := id_ex.branch  // Only update for branches, not jumps
+
 
   // Update Fetch Unit
   fetch.io.branch_taken   := pc_change
   fetch.io.jump_target_pc := jump_target
   fetch.io.stall          := hazard.io.stall
   fetch.io.halt           := id_ex.halt
+  fetch.io.predict_taken     := branchPredictor.io.predict_taken
+  fetch.io.predicted_target  := branchPredictor.io.predicted_target
 
+  //BRanch precdiction update
+  branchPredictor.io.fetch_pc := fetch.io.pc
   // Update Hazard Unit
   hazard.io.branch_taken := pc_change
+  hazard.io.predicted_taken := branchPredictor.io.predict_taken
 
   // Load-Use Hazard Detection signals:
   hazard.io.id_ex_memToReg   := id_ex.memToReg
