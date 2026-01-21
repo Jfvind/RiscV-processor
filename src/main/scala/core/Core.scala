@@ -93,6 +93,10 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     val csr_op       = UInt(3.W)   //
     val csr_src_imm  = Bool()      //
     val csr_addr     = UInt(12.W)  //
+    // Load/Store Signals
+    val loadType      = UInt(3.W)
+    val loadUnsigned  = Bool()
+    val storeType     = UInt(3.W)
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
@@ -131,6 +135,10 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     id_ex.csr_op      := decode.io.csr_op
     id_ex.csr_src_imm := decode.io.csr_src_imm
     id_ex.csr_addr    := if_id_instr(31, 20)    // (CSR address from instruction)
+    // Load/Store Signals
+    id_ex.loadType     := decode.io.loadType
+    id_ex.loadUnsigned := decode.io.loadUnsigned
+    id_ex.storeType    := decode.io.storeType
   }
 
   // ==============================================================================
@@ -154,6 +162,10 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     val auipc      = Bool()
     val csr_data   = UInt(32.W)
     val is_csr     = Bool()
+    // Load/Store Signals
+    val loadType      = UInt(3.W)
+    val loadUnsigned  = Bool()
+    val storeType     = UInt(3.W)
   }
   val ex_mem = RegInit(0.U.asTypeOf(new EX_MEM_Bundle))
 
@@ -278,6 +290,11 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   ex_mem.csr_data   := csrModule.io.csr_data_out
   ex_mem.is_csr     := (id_ex.csr_op =/= 0.U)
 
+  // Load/Store Signals
+  ex_mem.loadType     := id_ex.loadType
+  ex_mem.loadUnsigned := id_ex.loadUnsigned
+  ex_mem.storeType    := id_ex.storeType
+
   // ==============================================================================
   // MEM STAGE (Memory Access)
   // ==============================================================================
@@ -364,6 +381,10 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   memIO.io.address   := ex_mem.alu_result
   memIO.io.writeData := ex_mem.rs2_data
   memIO.io.memWrite  := ex_mem.memWrite
+
+  memIO.io.loadType     := ex_mem.loadType
+  memIO.io.loadUnsigned := ex_mem.loadUnsigned
+  memIO.io.storeType    := ex_mem.storeType
 
   // Read data from memory
   val memReadData = memIO.io.readData

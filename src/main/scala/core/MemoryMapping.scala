@@ -23,6 +23,11 @@ class MemoryMapping extends Module {
     // Signlas for instructionFetch
     val imemWriteEn = Output(Bool())
     val imemWriteAddr = Output(UInt(32.W))
+
+    // load- og store-typer til DataMemory
+    val loadType      = Input(UInt(3.W))
+    val loadUnsigned  = Input(Bool())
+    val storeType     = Input(UInt(3.W))
   })
 
   // Instantiate real DataMemory (RAM)
@@ -52,6 +57,11 @@ class MemoryMapping extends Module {
   dataMem.io.writeData := io.writeData
   dataMem.io.memWrite  := io.memWrite && isRam // Only writing to RAM if writing is asked and the address is in RAM
   io.readData := dataMem.io.readData // Data from the address is available as output
+
+  //Forward nye signaler til DataMemory kun hvis det er RAM-adresse (default til 0/false ellers for safety).
+  dataMem.io.loadType     := Mux(isRam, io.loadType, 0.U)
+  dataMem.io.loadUnsigned := Mux(isRam, io.loadUnsigned, false.B)
+  dataMem.io.storeType    := Mux(isRam, io.storeType, 0.U)
 
   // --- LED LOGIC ---
   val ledReg = RegInit(0.U(1.W))

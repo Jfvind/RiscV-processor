@@ -31,6 +31,12 @@ class ControlUnit extends Module {
     val csr_op      = Output(UInt(3.W))   // CSR operation (fra CSRConstants)
     val csr_src_imm = Output(Bool())      // True hvis immediate-variant (CSRRWI etc.)
 
+    // Nye signaler for at håndtere load-typer (baseret på funct3) og unsigned-flag for LBU/LHU.
+    val loadType      = Output(UInt(3.W))  // Direkte funct3 for load-instruktioner
+    val loadUnsigned  = Output(Bool())     // True for LBU/LHU (zero-extend)
+    // Nyt signal for store-typer (baseret på funct3) til delvis writes (SB/SH/SW).
+    val storeType     = Output(UInt(3.W))  // Direkte funct3 for store-instruktioner
+
   })
 
   // ============================================
@@ -46,17 +52,26 @@ class ControlUnit extends Module {
 
   // Default signals: for defined behaviour when being synthesized
   io.regWrite := false.B
+
   io.aluSrc   := false.B
   io.aluOp    := ALU_OP_MEM
+
   io.memWrite := false.B
   io.branch   := false.B
   io.memToReg := false.B
+
   io.jump     := false.B
   io.jumpReg := false.B
   io.auipc := false.B
+
   io.halt := false.B
+
   io.csr_op   := CSR_OP_NOP
   io.csr_src_imm := false.B
+
+  io.loadType := 0.U
+  io.loadUnsigned := false.B
+  io.storeType := 0.U
 
   io.imm      := immGen.io.imm_i
 
@@ -86,6 +101,8 @@ class ControlUnit extends Module {
       io.memToReg := true.B //Mem not ALU
       io.imm := immGen.io.imm_i
       //Memread
+      io.loadType := funct3
+      io.loadUnsigned := (funct3(2) === 1.U)  // Bit 2=1 for unsigned loads (100=LBU, 101=LHU)
     }
 
     // 4. Store (sw) - S-Type
@@ -96,6 +113,7 @@ class ControlUnit extends Module {
       io.regWrite := false.B // Stores returnerer ikke noget til register
       io.memToReg := false.B
       io.imm := immGen.io.imm_s
+      io.storeType := funct3
     }
 
     // 5. Branch (beq, bne, etc.) - B-Type
