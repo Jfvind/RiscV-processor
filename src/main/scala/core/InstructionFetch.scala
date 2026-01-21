@@ -26,7 +26,7 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   })
 
   // ======= START: NY HUKOMMELSES-LOGIK =======
-  val ramSize = 17500
+  val ramSize = 13000
   val ram = SyncReadMem(ramSize, UInt(32.W))
 
   // 1. Priority: If a file-path is specified, read it to RAM
