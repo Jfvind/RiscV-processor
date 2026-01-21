@@ -15,7 +15,7 @@ class Top extends Module {
   // val core = Module(new Core(Programs.uartPipelineTest)) // DONT DELETE: Programs.??? controls what program is syntezised to FPGA
   
   // Otherwise we use a filepath: e.g. when running the prime_benchmark
-  val core = Module(new Core(programFile = "src/main/resources/verify_imem.mem"))
+  val core = Module(new Core(programFile = "verify_imem.mem"))
   // --- LED INSTANTIATION/CONNECTION ---
   io.led := core.io.led
 
