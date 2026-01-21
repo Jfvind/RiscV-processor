@@ -23,7 +23,7 @@ class DataMemory extends Module {
 
   // This tells the synthesis tool to preload RAM with your program/data
   //loadMemoryFromFile(memory, "C:/DTU-local/Repos/RiscV-processor/src/main/resources/prime_bench.mem")
-  loadMemoryFromFileInline(memory, "C:/DTU-local/Repos/RiscV-processor/src/main/resources/prime_bench.mem")
+  loadMemoryFromFileInline(memory, "src/main/resources/prime_bench.mem")
 
   val wordAddr = io.address >> 2
   val byteOffset = io.address(1, 0) // 0, 1, 2, 3
