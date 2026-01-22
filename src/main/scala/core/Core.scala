@@ -1,5 +1,5 @@
 // This instantiates the ALU, Register File, Control Unit, MemoryMapping, and InstructionFetch and wires them together.
-package core
+/*package core
 
 import chisel3._
 import chisel3.util._
@@ -405,5 +405,328 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   io.debug_branch_taken := pc_change
 
   // 3. Connect CSR Info
+  io.debug_mcycle       := csrModule.io.csr_data_out
+}*/
+
+package core
+
+import chisel3._
+import chisel3.util._
+
+class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module {
+  val io = IO(new Bundle {
+    val pc_out      = Output(UInt(32.W))
+    val instruction = Output(UInt(32.W)) 
+    val alu_res     = Output(UInt(32.W))
+    val led         = Output(UInt(1.W))
+    val uartData    = Output(UInt(8.W))
+    val uartAddr    = Output(UInt(32.W))
+    val uartValid   = Output(Bool())
+    val tx          = Output(Bool())
+
+    // Debug Access Ports
+    val debug_x1    = Output(UInt(32.W))
+    val debug_x2    = Output(UInt(32.W))
+    val debug_x3    = Output(UInt(32.W))
+    val debug_x4    = Output(UInt(32.W))
+    val debug_x10   = Output(UInt(32.W))
+    val debug_x11   = Output(UInt(32.W))
+    val debug_x12   = Output(UInt(32.W))
+    val debug_x13   = Output(UInt(32.W))
+    val debug_x14   = Output(UInt(32.W))
+
+    val debug_stall        = Output(Bool())
+    val debug_flush        = Output(Bool())
+    val debug_forwardA     = Output(UInt(2.W))
+    val debug_forwardB     = Output(UInt(2.W))
+    val debug_branch_taken = Output(Bool())
+    val debug_mcycle       = Output(UInt(32.W))
+  })
+
+  // Instantiate Modules
+  val fetch      = Module(new InstructionFetch(program, programFile))
+  val decode     = Module(new ControlUnit())
+  val regFile    = Module(new RegisterFile())
+  val alu        = Module(new ALU())
+  val memIO      = Module(new MemoryMapping())
+  val forwarding = Module(new ForwardingUnit())
+  val hazard     = Module(new HazardUnit())
+  val uart       = Module(new BufferedTx(25000000, 115200)) // Ensure this matches your clock
+  val csrModule  = Module(new CSRModule())
+  val branchPredictor = Module(new BranchPredictor())
+
+  // ==============================================================================
+  // IF STAGE
+  // ==============================================================================
+  val if_id_pc    = RegInit(0.U(32.W))
+  val if_id_instr = RegInit(0.U(32.W))
+
+  when(hazard.io.flush) {
+    if_id_pc    := 0.U
+    if_id_instr := 0x00000013.U//NOP
+  }.elsewhen(!hazard.io.stall) {
+    if_id_pc    := fetch.io.pc
+    if_id_instr := fetch.io.instruction
+  }
+
+  // ==============================================================================
+  // ID STAGE
+  // ==============================================================================
+  decode.io.instruction := if_id_instr
+
+  regFile.io.rs1_addr := if_id_instr(19, 15)
+  regFile.io.rs2_addr := if_id_instr(24, 20)
+
+  class ID_EX_Bundle extends Bundle {
+    val pc       = UInt(32.W)
+    val rs1_data = UInt(32.W)
+    val rs2_data = UInt(32.W)
+    val imm      = UInt(32.W)
+    val rs1_addr = UInt(5.W)
+    val rs2_addr = UInt(5.W)
+    val rd_addr  = UInt(5.W)
+    val alu_op   = UInt(4.W)
+    val regWrite = Bool()
+    val memWrite = Bool()
+    val branch   = Bool()
+    val aluSrc   = Bool()
+    val funct3   = UInt(3.W)
+    val funct7   = UInt(7.W)
+    val memToReg = Bool()
+    val jump     = Bool()
+    val jumpReg  = Bool()
+    val auipc    = Bool()
+    val halt     = Bool()
+    val csr_op       = UInt(3.W)
+    val csr_src_imm  = Bool()
+    val csr_addr     = UInt(12.W)
+    val loadType      = UInt(3.W)
+    val loadUnsigned  = Bool()
+    val storeType     = UInt(3.W)
+  }
+  val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
+
+  when(hazard.io.flush || hazard.io.stall) {
+    id_ex := 0.U.asTypeOf(new ID_EX_Bundle)
+  } .otherwise {
+    id_ex.pc       := if_id_pc
+    id_ex.rs1_data := regFile.io.rs1_data
+    id_ex.rs2_data := regFile.io.rs2_data
+    id_ex.imm      := decode.io.imm
+    id_ex.rs1_addr := if_id_instr(19, 15)
+    id_ex.rs2_addr := if_id_instr(24, 20)
+    id_ex.rd_addr  := if_id_instr(11, 7)
+    id_ex.alu_op   := decode.io.aluOp
+    id_ex.regWrite := decode.io.regWrite
+    id_ex.memWrite := decode.io.memWrite
+    id_ex.branch   := decode.io.branch
+    id_ex.aluSrc   := decode.io.aluSrc
+    id_ex.funct3   := if_id_instr(14, 12)
+    id_ex.funct7   := if_id_instr(31, 25)
+    id_ex.memToReg := decode.io.memToReg
+    id_ex.jump     := decode.io.jump
+    id_ex.jumpReg  := decode.io.jumpReg
+    id_ex.auipc    := decode.io.auipc
+    id_ex.halt     := decode.io.halt
+    id_ex.csr_op      := decode.io.csr_op
+    id_ex.csr_src_imm := decode.io.csr_src_imm
+    id_ex.csr_addr    := if_id_instr(31, 20)
+    id_ex.loadType     := decode.io.loadType
+    id_ex.loadUnsigned := decode.io.loadUnsigned
+    id_ex.storeType    := decode.io.storeType
+  }
+
+  // ==============================================================================
+  // EX STAGE
+  // ==============================================================================
+
+  class EX_MEM_Bundle extends Bundle {
+    val alu_result = UInt(32.W)
+    val rs2_data   = UInt(32.W)
+    val rd_addr    = UInt(5.W)
+    val regWrite   = Bool()
+    val memWrite   = Bool()
+    val memToReg   = Bool()
+    val pc_plus_4  = UInt(32.W)
+    val jump       = Bool()
+    val jumpReg    = Bool()
+    val pc         = UInt(32.W)
+    val imm        = UInt(32.W)
+    val auipc      = Bool()
+    val csr_data   = UInt(32.W)
+    val is_csr     = Bool()
+    val loadType      = UInt(3.W)
+    val loadUnsigned  = Bool()
+    val storeType     = UInt(3.W)
+  }
+  val ex_mem = RegInit(0.U.asTypeOf(new EX_MEM_Bundle))
+
+  class MEM_WB_Bundle extends Bundle {
+    val result   = UInt(32.W) 
+    val rd_addr  = UInt(5.W)
+    val regWrite = Bool()
+  }
+  val mem_wb = RegInit(0.U.asTypeOf(new MEM_WB_Bundle))
+
+  // The wire that holds the data decided in the MEM stage (ALU vs Mem vs CSR)
+  val wb_data = Wire(UInt(32.W))
+
+  // --- Forwarding Logic ---
+  forwarding.io.id_ex_rs1       := id_ex.rs1_addr
+  forwarding.io.id_ex_rs2       := id_ex.rs2_addr
+  forwarding.io.ex_mem_rd       := ex_mem.rd_addr
+  forwarding.io.ex_mem_regWrite := ex_mem.regWrite
+  forwarding.io.mem_wb_rd       := mem_wb.rd_addr
+  forwarding.io.mem_wb_regWrite := mem_wb.regWrite
+
+  val forwardA_data = MuxLookup(forwarding.io.forwardA, id_ex.rs1_data)(Seq(
+    0.U -> id_ex.rs1_data,
+    1.U -> mem_wb.result,   // Forward from WB
+    2.U -> wb_data          // Forward from MEM (The value we just calculated below)
+  ))
+
+  val forwardB_data = MuxLookup(forwarding.io.forwardB, id_ex.rs2_data)(Seq(
+    0.U -> id_ex.rs2_data,
+    1.U -> mem_wb.result,
+    2.U -> wb_data
+  ))
+
+  alu.io.alu_op := id_ex.alu_op
+  alu.io.alu_a  := Mux(id_ex.auipc, id_ex.pc, forwardA_data)
+  alu.io.alu_b  := Mux(id_ex.aluSrc, id_ex.imm, forwardB_data)
+
+  csrModule.io.csr_addr    := id_ex.csr_addr
+  csrModule.io.csr_op      := id_ex.csr_op
+  csrModule.io.csr_data_in := Mux(id_ex.csr_src_imm, id_ex.imm, forwardA_data)
+  csrModule.io.inst_retire  := mem_wb.regWrite
+  csrModule.io.pc_in        := id_ex.pc
+  csrModule.io.cause_in     := 0.U
+  csrModule.io.trap_trigger := false.B
+
+  val branchConditionMet = MuxLookup(id_ex.funct3, false.B)(Seq(
+    "b000".U -> alu.io.zero,
+    "b001".U -> !alu.io.zero,
+    "b100".U -> alu.io.less_signed,
+    "b101".U -> !alu.io.less_signed,
+    "b110".U -> alu.io.less_unsigned,
+    "b111".U -> !alu.io.less_unsigned
+  ))
+
+  val branch_taken = id_ex.branch && branchConditionMet
+  val jump_taken = id_ex.jump
+  val pc_change = branch_taken || jump_taken
+
+  val jump_target = Mux(id_ex.jumpReg,
+    (forwardA_data + id_ex.imm) & ~1.U,
+    id_ex.pc + id_ex.imm
+  )
+
+  branchPredictor.io.update_valid  := true.B
+  branchPredictor.io.update_pc     := id_ex.pc
+  branchPredictor.io.update_taken  := pc_change
+  branchPredictor.io.update_target := jump_target
+  branchPredictor.io.is_branch     := id_ex.branch
+
+  fetch.io.branch_taken   := pc_change
+  fetch.io.jump_target_pc := jump_target
+  fetch.io.stall          := hazard.io.stall
+  fetch.io.halt           := id_ex.halt
+  fetch.io.write_en       := memIO.io.imemWriteEn
+  fetch.io.write_addr     := memIO.io.imemWriteAddr
+  fetch.io.write_data     := ex_mem.rs2_data
+  fetch.io.predict_taken     := branchPredictor.io.predict_taken
+  fetch.io.predicted_target  := branchPredictor.io.predicted_target
+  branchPredictor.io.fetch_pc := fetch.io.pc
+  hazard.io.branch_taken := pc_change
+  hazard.io.predicted_taken := branchPredictor.io.predict_taken
+
+  hazard.io.id_ex_memToReg   := id_ex.memToReg
+  hazard.io.id_ex_rd         := id_ex.rd_addr
+  hazard.io.if_id_rs1        := if_id_instr(19, 15)
+  hazard.io.if_id_rs2        := if_id_instr(24, 20)
+
+  ex_mem.alu_result := alu.io.result
+  ex_mem.rs2_data   := forwardB_data
+  ex_mem.rd_addr    := id_ex.rd_addr
+  ex_mem.regWrite   := id_ex.regWrite
+  ex_mem.memWrite   := id_ex.memWrite
+  ex_mem.memToReg   := id_ex.memToReg
+  ex_mem.pc_plus_4  := id_ex.pc + 4.U
+  ex_mem.jump       := id_ex.jump
+  ex_mem.jumpReg    := id_ex.jumpReg
+  ex_mem.pc         := id_ex.pc
+  ex_mem.imm        := id_ex.imm
+  ex_mem.auipc      := id_ex.auipc
+  ex_mem.csr_data   := csrModule.io.csr_data_out
+  ex_mem.is_csr     := (id_ex.csr_op =/= 0.U)
+  ex_mem.loadType     := id_ex.loadType
+  ex_mem.loadUnsigned := id_ex.loadUnsigned
+  ex_mem.storeType    := id_ex.storeType
+
+  // ==============================================================================
+  // MEM STAGE
+  // ==============================================================================
+  uart.io.channel.valid := memIO.io.uartValid
+  uart.io.channel.bits  := memIO.io.uartData(7, 0)
+  io.tx := uart.io.txd
+
+  memIO.io.address   := ex_mem.alu_result
+  memIO.io.writeData := ex_mem.rs2_data
+  memIO.io.memWrite  := ex_mem.memWrite
+  memIO.io.loadType     := ex_mem.loadType
+  memIO.io.loadUnsigned := ex_mem.loadUnsigned
+  memIO.io.storeType    := ex_mem.storeType
+
+  // Handle UART Status (IO Read)
+  val is_uart_status = (ex_mem.alu_result === 0x1004.U)
+  val uart_status_word = Cat(0.U(31.W), uart.io.channel.ready)
+
+  // Standard Writeback Mux (Async Memory: Data is ready NOW)
+  wb_data := MuxCase(ex_mem.alu_result, Seq(
+    ex_mem.jump      -> ex_mem.pc_plus_4,       
+    ex_mem.auipc     -> (ex_mem.pc + ex_mem.imm), 
+    ex_mem.is_csr    -> ex_mem.csr_data,        
+    ex_mem.memToReg  -> Mux(is_uart_status, uart_status_word, memIO.io.readData) 
+  ))
+  
+  // Update MEM/WB Register
+  mem_wb.result   := wb_data
+  mem_wb.rd_addr  := ex_mem.rd_addr
+  mem_wb.regWrite := ex_mem.regWrite
+
+  // ==============================================================================
+  // WB STAGE
+  // ==============================================================================
+  
+  regFile.io.rd_addr   := mem_wb.rd_addr
+  regFile.io.rd_data   := mem_wb.result
+  regFile.io.reg_write := mem_wb.regWrite
+
+  // ==============================================================================
+  // DEBUG OUTPUTS
+  // ==============================================================================
+  io.pc_out      := if_id_pc
+  io.instruction := if_id_instr
+  io.alu_res     := ex_mem.alu_result
+  io.led         := memIO.io.led
+  io.uartData    := memIO.io.uartData
+  io.uartAddr    := memIO.io.uartAddr
+  io.uartValid   := memIO.io.uartValid
+
+  io.debug_x1  := regFile.io.debug_x1
+  io.debug_x2  := regFile.io.debug_x2
+  io.debug_x3  := regFile.io.debug_x3
+  io.debug_x4  := regFile.io.debug_x4
+  io.debug_x10 := regFile.io.debug_x10
+  io.debug_x11 := regFile.io.debug_x11
+  io.debug_x12 := regFile.io.debug_x12
+  io.debug_x13 := regFile.io.debug_x13
+  io.debug_x14 := regFile.io.debug_x14
+
+  io.debug_stall        := hazard.io.stall
+  io.debug_flush        := hazard.io.flush
+  io.debug_forwardA     := forwarding.io.forwardA
+  io.debug_forwardB     := forwarding.io.forwardB
+  io.debug_branch_taken := pc_change
   io.debug_mcycle       := csrModule.io.csr_data_out
 }

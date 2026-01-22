@@ -1,4 +1,4 @@
-package core
+/*package core
 
 import chisel3._
 import chisel3.util._
@@ -72,6 +72,58 @@ class MemoryMapping extends Module {
   io.led := ledReg // Connecting output
 
   // --- UART LOGIC ---
+  io.uartValid := io.memWrite && isUartData
+  io.uartAddr  := io.address
+  io.uartData  := io.writeData
+}
+*/
+package core
+import chisel3._
+import chisel3.util._
+
+class MemoryMapping extends Module {
+  val io = IO(new Bundle {
+    val address   = Input(UInt(32.W))
+    val writeData = Input(UInt(32.W))
+    val memWrite  = Input(Bool())
+    val readData  = Output(UInt(32.W)) 
+    val led       = Output(UInt(1.W))  
+    val uartData  = Output(UInt(32.W))
+    val uartAddr  = Output(UInt(32.W))
+    val uartValid = Output(Bool())
+    val imemWriteEn = Output(Bool())
+    val imemWriteAddr = Output(UInt(32.W))
+    // Removed isRam output
+    val loadType      = Input(UInt(3.W))
+    val loadUnsigned  = Input(Bool())
+    val storeType     = Input(UInt(3.W))
+  })
+
+  val dataMem = Module(new DataMemory())
+
+  val isImemWrite = (io.address >= 0x8000.U)
+  val isLed = (io.address === 100.U)
+  val isUartData   = (io.address === 0x1000.U)
+  val isUartStatus = (io.address === 0x1004.U)
+  val isUart       = isUartData || isUartStatus
+  val isRam = !isLed && !isUart && !isImemWrite
+
+  io.imemWriteEn   := io.memWrite && isImemWrite
+  io.imemWriteAddr := io.address - 0x8000.U
+
+  dataMem.io.address   := io.address
+  dataMem.io.writeData := io.writeData
+  dataMem.io.memWrite  := io.memWrite && isRam
+  io.readData := dataMem.io.readData
+
+  dataMem.io.loadType     := Mux(isRam, io.loadType, 0.U)
+  dataMem.io.loadUnsigned := Mux(isRam, io.loadUnsigned, false.B)
+  dataMem.io.storeType    := Mux(isRam, io.storeType, 0.U)
+
+  val ledReg = RegInit(0.U(1.W))
+  when(io.memWrite && isLed) { ledReg := io.writeData(0) }
+  io.led := ledReg
+
   io.uartValid := io.memWrite && isUartData
   io.uartAddr  := io.address
   io.uartData  := io.writeData

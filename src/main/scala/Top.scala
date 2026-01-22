@@ -28,6 +28,7 @@ class Top extends Module {
     io.led := core.io.led
   }
 }
+
 /*
   // --- CORE INSTANTIATION ---
   // Otherwise we use a filepath: e.g. when running the prime_benchmark
