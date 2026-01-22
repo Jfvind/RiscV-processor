@@ -63,10 +63,7 @@ object DiagnosticPrograms {
     // Loop
     "h00052583".U(32.W), // 8: lw x11, 0(x10)
     "h0015f593".U(32.W), // 12: andi x11, x11, 1
-
-    // FIX: Corrected BEQ x11, x0, -8 (Check x11, not x0!)
-    "hfe058ce3".U(32.W),
-
+    "hfe058ce3".U(32.W), // 16: beq x11, x0, -8 (Check x11!=0)
     "h00058513".U(32.W), // 20: addi x10, x11, 0
     "h00000073".U(32.W)  // 24: ecall
   ) ++ padding
