@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util.experimental.loadMemoryFromFileInline
 import chisel3.util._
 
-class DataMemory extends Module {
+class DataMemory(programFile: String = "") extends Module {
   val io = IO(new Bundle {
     val address   = Input(UInt(32.W)) // From ALU
     val writeData = Input(UInt(32.W)) // Data to store (from rs2 in RegisterFile) (Register to RAM)
@@ -22,7 +22,9 @@ class DataMemory extends Module {
   val memory = Mem(8192, UInt(32.W)) // Convert to Syncreadmem????
 
   // This tells the synthesis tool to preload RAM with your program/data
-  loadMemoryFromFileInline(memory, "src/main/resources/uart_a.mem")
+  if (programFile.nonEmpty) {
+    loadMemoryFromFileInline(memory, programFile)
+  }
   
   val wordAddr = io.address >> 2
   val byteOffset = io.address(1, 0) // 0, 1, 2, 3

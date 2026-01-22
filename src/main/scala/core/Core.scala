@@ -50,7 +50,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val regFile    = Module(new RegisterFile())
   val alu        = Module(new ALU())           // Contains ALUConstants
   //val aluDecoder = Module(new ALUDecoder())
-  val memIO      = Module(new MemoryMapping()) // Decides RAM or LED (Contains DataMemory)
+  val memIO      = Module(new MemoryMapping(programFile = programFile)) // Decides RAM or LED (Contains DataMemory)
   val forwarding = Module(new ForwardingUnit())
   val hazard     = Module(new HazardUnit())
   //val serialPort = Module(new Serialport())
