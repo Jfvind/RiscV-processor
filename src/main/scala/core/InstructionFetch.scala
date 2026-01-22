@@ -54,9 +54,20 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
 
   // Program Counter Register
   val pc = RegInit(0.U(32.W))
+
+  // Startup logic to handle the 1-cycle latency of SyncReadMem
+  // This ensures we fetch the instruction at address 0 correctly
+  val startup = RegInit(true.B)
+  when(startup && !io.stall) {
+    startup := false.B
+  }
+
   // Halt mechanism to prevent PC from running beyond program
+  // Program should halt after the last instruction is fetched, or on io.halt
   val maxPC = currentRomSize * 4.U
   val halted = RegInit(false.B)
+
+  // Only update PC when not halted, not stalling, and not in the first startup cycle
 
   // We calculate next_pc, before the PC-register is updated.
   // We need the next adress to start reading from SyncReadMem now, so that the next instr is ready in the next clockcycle.
@@ -64,19 +75,22 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   //val next_pc = Mux(io.branch_taken, io.jump_target_pc, pc + 4.U)
   // next_pc er en ledning (Wire), der altid har en værdi.
 
-  // MuxCase vælger den første 'true' condition fra toppen af listen.
-    val next_pc = MuxCase(pc + 4.U, Seq(
-      io.branch_taken  -> io.jump_target_pc,   // 1. Prioritet: Faktisk branch/jump
-      io.predict_taken -> io.predicted_target  // 2. Prioritet: Forudsigelse
-    ))
-
-  // Check if we've reached the end of the program
-  when(!halted && pc >= maxPC - 4.U) {
+  // Priority-based Next PC selection:
+  // 1. Actual branch/jump resolution from EX stage (Correction)
+  // 2. Branch prediction for the next fetch
+  // 3. Sequential increment (PC + 4)
+  val next_pc = Mux(io.branch_taken,
+    io.jump_target_pc,
+    Mux(io.predict_taken, io.predicted_target, pc + 4.U)
+  )
+  // Check if we've reached the end of the program or received a halt signal
+  // Use maxPC insted of maxPC - 4 to fetch the last instruction
+  when((!halted && pc >= maxPC) || io.halt) {
     halted := true.B
   }
   
-  // PC update logic
-  when(!halted && !io.stall) {
+  // PC update logic: Only update when not stalled, not halted, and not in startup
+  when(!halted && !io.stall && !startup) {
     pc := next_pc
   }
   // If halted, PC doesn't change (stays at last instruction)
@@ -89,10 +103,12 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   val safeIndex = (pc >> 2.U)(log2Ceil(testRomContent.length.max(1)) - 1, 0)
 
   // 1. Fetch from RAM (used for benchmarks or bootloading)
-  // to hit the right adress with syncedmem (1 cycle delay), we can read from the adress vi are
-  // on our way to (next_pc).
-  // We only read if the processor is not ideling
-  val ramReadAddr = (next_pc - 0x8000.U) >> 2.U
+  // Startup Fix: Use current PC (0) during startup cycle, otherwise use next_pc
+  // This compensates for the 1-cycle delay of SyncReadMem
+  val readAddr = Mux(startup, (pc - 0x8000.U) >> 2.U, (next_pc - 0x8000.U) >> 2.U)
+
+  // Prevent underflow if next_pc is below the 0x8000 RAM threshold
+  val ramReadAddr = Mux(is_in_ram_range || (startup && pc >= 0x8000.U), readAddr, 0.U)
   val instrFromRam = ram.read(ramReadAddr, !io.stall && !halted)
 
   // 2. Fetch from vector (used for old Scala tests)
@@ -101,11 +117,16 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   // 3. Choose the correct source:
   // If we are over 0x8000, we always read from RAM.
   // If a test-program is loaded we use the vector. Otherwise we use the bottom of the RAM (0x000+)
+  // Also handles the startup cycle for low-memory addresses
+  val ramFallback = ram.read(Mux(startup, pc >> 2.U, next_pc >> 2.U), !io.stall)
+
   val fetchedInstr = Mux(is_in_ram_range,
     instrFromRam,
-    Mux(hasTestProgram, instrFromRom, ram.read(next_pc >> 2.U, !io.stall))
+    Mux(hasTestProgram, instrFromRom, ramFallback)
   )
   // ====== END: FETCH LOGIC ======
-  io.instruction := Mux(halted, 0x00000013.U, fetchedInstr)
+
+  // Output a NOP (addi x0, x0, 0) during startup or when halted
+  io.instruction := Mux(halted || startup, 0x00000013.U, fetchedInstr)
   io.pc := pc
 }
