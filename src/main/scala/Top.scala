@@ -12,8 +12,8 @@ class Top extends Module {
 
   // --- CORE INSTANTIATION ---
   // Otherwise we use a filepath: e.g. when running the prime_benchmark
-  //val core = Module(new Core(programFile = "prime_bench.mem"))
-  val core = Module(new Core(programFile = "test_mem_loading_led.mem"))
+  val core = Module(new Core(programFile = "prime_bench.mem"))
+  
   // --- LED INSTANTIATION/CONNECTION ---
   io.led := core.io.led
 
