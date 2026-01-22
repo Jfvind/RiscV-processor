@@ -131,7 +131,7 @@ __attribute__((section(".text.start"))) __attribute__((naked)) void entry()
 {
     // We love that no stack pointer is initialized by default
     //__asm__ volatile("li sp, 0x00011000"); // Set stack pointer to top of memory
-    __asm__ volatile("li sp, 0x00008000"); // --> Sets stack pointer to top of DMEM
+    __asm__ volatile("li sp, 0x00001000"); // --> Sets stack pointer to top of DMEM
     __asm__ volatile("jal ra, main");
     __asm__ volatile("ecall"); // infinite loop after main returns
 }

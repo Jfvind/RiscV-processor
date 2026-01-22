@@ -19,10 +19,10 @@ class DataMemory extends Module {
   })
 
   // 32KB memory
-  val memory = Mem(8192, UInt(32.W)) // Convert to Syncreadmem????
+  val memory = Mem(8192, UInt(32.W))
 
   // This tells the synthesis tool to preload RAM with your program/data
-  loadMemoryFromFileInline(memory, "src/main/resources/prime_bench.mem")
+  loadMemoryFromFileInline(memory, "prime_bench.mem")
   
   val wordAddr = io.address >> 2
   val byteOffset = io.address(1, 0) // 0, 1, 2, 3
