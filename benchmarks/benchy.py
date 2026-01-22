@@ -50,7 +50,7 @@ def main():
     print("Select FPGA UART port to connect to:")
     port_index = int(input("Port: "))
     port_name = device_list[port_index]
-    baud_rate = 115200
+    baud_rate = int(input("Enter baud rate (e.g., 115200): "))
     with serial.Serial(port_name, baud_rate, timeout=1, stopbits=2) as ser:
         print(f"Connected to {port_name} at {baud_rate} baud.")
         print("Reset board or load program to start benchmark.")

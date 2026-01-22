@@ -1,4 +1,4 @@
-package core
+/*package core
 
 import chisel3._
 //import chisel3.util.experimental.loadMemoryFromFile
@@ -19,12 +19,14 @@ class DataMemory extends Module {
   })
 
   // 32KB memory
-  val memory = Mem(8192, UInt(32.W))
+  //val memory = Mem(8192, UInt(32.W))
+  val memory = Mem(1024, UInt(32.W))
 
   // This tells the synthesis tool to preload RAM with your program/data
   loadMemoryFromFileInline(memory, "prime_bench.mem")
   
   val wordAddr = io.address >> 2
+  /*
   val byteOffset = io.address(1, 0) // 0, 1, 2, 3
   val bitOffset = byteOffset * 8.U  // 0, 8, 16, 24
 
@@ -32,9 +34,11 @@ class DataMemory extends Module {
   val word = memory.read(wordAddr)
   val readDataRaw = Wire(UInt(32.W))
   readDataRaw := 0.U
+  */
 
   // I stedet for slicing: Shift wordet ned, så de data vi vil have, ligger på index 0
   // F.eks: Hvis vi vil læse byte 1 (bits 15:8), shifter vi wordet 8 pladser til højre.
+  /*
   val shiftedWord = word >> bitOffset
 
   switch(io.loadType) {
@@ -59,11 +63,20 @@ class DataMemory extends Module {
       readDataRaw := half
     }
   }
-  io.readData := readDataRaw
+  */
+  io.readData := memory.read(wordAddr)//word//readDataRaw
 
+  // --- SIMPLE WRITE (The Fix) ---
+  // We completely bypass the Read-Modify-Write logic.
+  // If memWrite is true, we force a full 32-bit write.
+  when(io.memWrite) {
+    memory.write(wordAddr, io.writeData)
+  }
+
+  /*
   // --- WRITE LOGIC ---
   when(io.memWrite) {
-    val currentWord = memory.read(wordAddr)
+    val currentWord = word //memory.read(wordAddr)
     val newWord = Wire(UInt(32.W))
     newWord := currentWord // Default
 
@@ -89,5 +102,97 @@ class DataMemory extends Module {
       }
     }
     memory.write(wordAddr, newWord)
+  }
+  */
+}*/
+
+package core
+
+import chisel3._
+import chisel3.util.experimental.loadMemoryFromFileInline
+import chisel3.util._
+
+class DataMemory extends Module {
+  val io = IO(new Bundle {
+    val address   = Input(UInt(32.W))
+    val writeData = Input(UInt(32.W))
+    val memWrite  = Input(Bool())
+    val readData  = Output(UInt(32.W))
+    val loadType      = Input(UInt(3.W))
+    val loadUnsigned  = Input(Bool())
+    val storeType     = Input(UInt(3.W))
+  })
+
+  // 1024 Words, split into 4 byte lanes. 
+  // This enables "Byte Write Enable" in synthesis, avoiding read-modify-write loops.
+  val memory = Mem(1024, Vec(4, UInt(8.W)))
+  
+  // Note: This expects the hex file to be standard 32-bit words (e.g. "00000293")
+  loadMemoryFromFileInline(memory, "prime_bench.mem")
+
+  val wordAddr = io.address >> 2
+  val byteOffset = io.address(1, 0) // 0 to 3
+
+  // --- READ LOGIC ---
+  // Read all 4 lanes and combine
+  val readVec = memory.read(wordAddr)
+  val word = Cat(readVec(3), readVec(2), readVec(1), readVec(0))
+  
+  // Shift to move the desired byte/half to LSB
+  val bitOffset = byteOffset * 8.U
+  val shiftedWord = word >> bitOffset
+  
+  val readDataRaw = Wire(UInt(32.W))
+  readDataRaw := 0.U
+
+  // Standard Load Logic (LBU, LB, LW, etc.)
+  switch(io.loadType) {
+    is("b000".U) { readDataRaw := Mux(io.loadUnsigned, shiftedWord(7, 0), Cat(Fill(24, shiftedWord(7)), shiftedWord(7, 0))) } // LB
+    is("b001".U) { readDataRaw := Mux(io.loadUnsigned, shiftedWord(15, 0), Cat(Fill(16, shiftedWord(15)), shiftedWord(15, 0))) } // LH
+    is("b010".U) { readDataRaw := word } // LW
+    is("b100".U) { readDataRaw := shiftedWord(7, 0) } // LBU
+    is("b101".U) { readDataRaw := shiftedWord(15, 0) } // LHU
+  }
+  io.readData := readDataRaw
+
+  // --- WRITE LOGIC (Masked) ---
+  when(io.memWrite) {
+    // RISC-V Store Data is always in the lower bits of rs2
+    // SB: Data in [7:0]
+    // SH: Data in [15:0]
+    // SW: Data in [31:0]
+    
+    // We map these bits to the correct memory lane based on address
+    val b0 = io.writeData(7, 0)
+    val b1 = io.writeData(15, 8)
+    val b2 = io.writeData(23, 16)
+    val b3 = io.writeData(31, 24)
+
+    val wMask = Wire(Vec(4, Bool()))
+    val wData = Wire(Vec(4, UInt(8.W)))
+
+    // Default: Write Nothing
+    wMask(0) := false.B; wMask(1) := false.B; wMask(2) := false.B; wMask(3) := false.B
+    wData(0) := 0.U; wData(1) := 0.U; wData(2) := 0.U; wData(3) := 0.U
+
+    switch(io.storeType) {
+      is("b000".U) { // SB (Store Byte)
+        wMask(byteOffset) := true.B
+        wData(byteOffset) := b0 // Byte is always in LSB of writeData
+      }
+      is("b001".U) { // SH (Store Half)
+        wMask(byteOffset) := true.B
+        wMask(byteOffset + 1.U) := true.B
+        wData(byteOffset) := b0
+        wData(byteOffset + 1.U) := b1
+      }
+      is("b010".U) { // SW (Store Word)
+        wMask(0) := true.B; wMask(1) := true.B; wMask(2) := true.B; wMask(3) := true.B
+        wData(0) := b0; wData(1) := b1; wData(2) := b2; wData(3) := b3
+      }
+    }
+
+    // Write ONLY the masked bytes. No Read required!
+    memory.write(wordAddr, wData, wMask)
   }
 }

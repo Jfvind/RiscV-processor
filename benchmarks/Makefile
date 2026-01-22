@@ -6,6 +6,7 @@ NUM_PRIMES ?= 25
 
 CSR_EN ?= N
 DEBUG_EN ?= N
+REGISTER_TEST ?= N
 
 # Toolchain
 # Shamelessly stealing from Schoeberl to support mac
@@ -22,8 +23,8 @@ CC = $(CROSS)gcc
 OBJCOPY = $(CROSS)objcopy
 
 # Compiler flags for RV32I bare metal
-CFLAGS = -mabi=ilp32 -O0 
-CFLAGS += -ffreestanding -nostdlib -e entry -T linker.ld
+CFLAGS = -mabi=ilp32 -Os #-O0
+CFLAGS += -ffreestanding -nostdlib -mcmodel=medany -mno-relax -fPIE -nostartfiles -e entry -T linker.ld
 
 # Pass configuration to C code
 DEFINES = -DUART_ADDR=$(UART_ADDR) -DNUM_PRIMES=$(NUM_PRIMES)
@@ -36,6 +37,9 @@ else
 endif
 ifeq ($(DEBUG_EN), Y)
 	DEFINES += -DDEBUG_EN
+endif
+ifeq ($(REGISTER_TEST), Y)
+	DEFINES += -DREGISTER_TEST
 endif
 
 TARGET = prime
