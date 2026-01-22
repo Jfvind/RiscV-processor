@@ -23,7 +23,7 @@ CC = $(CROSS)gcc
 OBJCOPY = $(CROSS)objcopy
 
 # Compiler flags for RV32I bare metal
-CFLAGS = -mabi=ilp32 -Os #-O0
+CFLAGS = -mabi=ilp32 -O0
 CFLAGS += -ffreestanding -nostdlib -mcmodel=medany -mno-relax -fPIE -nostartfiles -e entry -T linker.ld
 
 # Pass configuration to C code
