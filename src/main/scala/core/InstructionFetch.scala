@@ -54,6 +54,13 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
 
   // Program Counter Register
   val pc = RegInit(0.U(32.W))
+
+  // Startup register for 1 stall cycle on startup after reset
+  val startup = RegInit(true.B)
+  when(startup && !io.stall) {
+    startup := false.B
+  }
+
   // Halt mechanism to prevent PC from running beyond program
   val maxPC = currentRomSize * 4.U
   val halted = RegInit(false.B)
@@ -76,7 +83,7 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   }
   
   // PC update logic
-  when(!halted && !io.stall) {
+  when(!halted && !io.stall && !startup) { // waiting for startup 1 cycle
     pc := next_pc
   }
   // If halted, PC doesn't change (stays at last instruction)
@@ -91,8 +98,11 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   // 1. Fetch from RAM (used for benchmarks or bootloading)
   // to hit the right adress with syncedmem (1 cycle delay), we can read from the adress vi are
   // on our way to (next_pc).
-  // We only read if the processor is not ideling
-  val ramReadAddr = (next_pc - 0x8000.U) >> 2.U
+  // If we are in startup, we need to read PC 0 instead of next_pc 4
+  val ramReadAddr = Mux(startup, 
+                        (pc - 0x8000.U) >> 2.U, 
+                        (next_pc - 0x8000.U) >> 2.U)
+
   val instrFromRam = ram.read(ramReadAddr, !io.stall && !halted)
 
   // 2. Fetch from vector (used for old Scala tests)
@@ -101,11 +111,16 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
   // 3. Choose the correct source:
   // If we are over 0x8000, we always read from RAM.
   // If a test-program is loaded we use the vector. Otherwise we use the bottom of the RAM (0x000+)
+  // Fallback uses a mux to choose between pc and next_pc under startup.
   val fetchedInstr = Mux(is_in_ram_range,
     instrFromRam,
-    Mux(hasTestProgram, instrFromRom, ram.read(next_pc >> 2.U, !io.stall))
+    Mux(hasTestProgram, 
+        instrFromRom, 
+        ram.read(Mux(startup, pc >> 2.U, next_pc >> 2.U), !io.stall))
   )
   // ====== END: FETCH LOGIC ======
-  io.instruction := Mux(halted, 0x00000013.U, fetchedInstr)
+
+  // We send a NOP under startup, while RAM finds a instruction for PC 0.
+  io.instruction := Mux(startup || halted, 0x00000013.U, fetchedInstr)
   io.pc := pc
 }
