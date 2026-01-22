@@ -50,7 +50,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val regFile    = Module(new RegisterFile())
   val alu        = Module(new ALU())           // Contains ALUConstants
   //val aluDecoder = Module(new ALUDecoder())
-  val memIO      = Module(new MemoryMapping()) // Decides RAM or LED (Contains DataMemory)
+  val memIO = Module(new MemoryMapping(programFile = programFile)) // Decides RAM or LED (Contains DataMemory)
   val forwarding = Module(new ForwardingUnit())
   val hazard     = Module(new HazardUnit())
   //val serialPort = Module(new Serialport())
@@ -122,6 +122,8 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     val loadType      = UInt(3.W)
     val loadUnsigned  = Bool()
     val storeType     = UInt(3.W)
+    // new stuff
+    val predict_taken = Bool()
   }
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
@@ -159,6 +161,8 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     id_ex.loadType     := decode.io.loadType
     id_ex.loadUnsigned := decode.io.loadUnsigned
     id_ex.storeType    := decode.io.storeType
+    // new stuff
+    id_ex.predict_taken := fetch.io.predict_taken
   }
 
   // ==============================================================================
@@ -199,6 +203,10 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
 
   val wb_data = Wire(UInt(32.W))
 
+  // --- STABILE SIGNALER (Gemmes før de nulstilles af en eventuel flush) ---
+  val stable_pc = id_ex.pc
+  val stable_predict_taken = id_ex.predict_taken
+  val stable_branch = id_ex.branch
   // --- Forwarding Logic ---
   forwarding.io.id_ex_rs1       := id_ex.rs1_addr
   forwarding.io.id_ex_rs2       := id_ex.rs2_addr
@@ -260,21 +268,25 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
 
   // Jump target (same calculation for both branch and JAL)
   val jump_target = Mux(id_ex.jumpReg,
-    (forwardA_data + id_ex.imm) & ~1.U,  // JALR: (rs1 + imm) & ~1
-    id_ex.pc + id_ex.imm                  // JAL:  PC + imm
+    (forwardA_data + id_ex.imm) & ~1.U(32.W),  // JALR: (rs1 + imm) & ~1
+    id_ex.pc + id_ex.imm                       // JAL:  PC + imm
   )
 
-  // Update Branch Predictor
-  branchPredictor.io.update_valid  := true.B
-  branchPredictor.io.update_pc     := id_ex.pc
-  branchPredictor.io.update_taken  := pc_change
-  branchPredictor.io.update_target := jump_target
-  branchPredictor.io.is_branch     := id_ex.branch  // Only update for branches, not jumps
+ // 1. Beregn misprediction baseret på de STABILE ledninger (før flushen sletter dem)
+  val misprediction = stable_predict_taken && !pc_change
 
+  // 2. Opdater Branch Predictor (Vi bruger stable_pc og stable_branch her)
+  branchPredictor.io.update_valid   := true.B
+  branchPredictor.io.update_pc      := stable_pc
+  branchPredictor.io.update_taken   := pc_change
+  branchPredictor.io.update_target  := jump_target
+  branchPredictor.io.is_branch      := stable_branch || stable_predict_taken
 
-  // Update Fetch Unit
-  fetch.io.branch_taken   := pc_change
-  fetch.io.jump_target_pc := jump_target
+  // 3. Opdater Fetch Unit
+  fetch.io.branch_taken    := pc_change || misprediction
+  // VIGTIGT: Vi bruger stable_pc + 4.U så den IKKE hopper til PC 4 (0 + 4)
+  fetch.io.jump_target_pc  := Mux(pc_change, jump_target, stable_pc + 4.U)
+
   fetch.io.stall          := hazard.io.stall
   fetch.io.halt           := id_ex.halt
   fetch.io.write_en       := memIO.io.imemWriteEn // Signal from MemoryMapping that tells if we are writing to 0x8000+
@@ -285,9 +297,9 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
 
   //BRanch precdiction update
   branchPredictor.io.fetch_pc := fetch.io.pc
-  // Update Hazard Unit
-  hazard.io.branch_taken := pc_change
-  hazard.io.predicted_taken := branchPredictor.io.predict_taken
+  // Brug de stabile ledninger så HazardUnit ikke slukker for sig selv
+  hazard.io.branch_taken    := (stable_branch && branchConditionMet) || id_ex.jump
+  hazard.io.predicted_taken := stable_predict_taken
 
   // Load-Use Hazard Detection signals:
   hazard.io.id_ex_memToReg   := id_ex.memToReg
@@ -296,6 +308,12 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   hazard.io.if_id_rs2        := if_id_instr(24, 20)
 
   // Update EX/MEM Register
+
+when(hazard.io.flush) {
+  // Hvis vi flusher, skal registret tømmes helt (indsæt en NOP)
+  ex_mem := 0.U.asTypeOf(new EX_MEM_Bundle)
+} .elsewhen(!hazard.io.stall) {
+  // Kun hvis vi IKKE flusher og IKKE staller, må vi gemme nye data
   ex_mem.alu_result := alu.io.result
   ex_mem.rs2_data   := forwardB_data // Store data (must be forwarded version)
   ex_mem.rd_addr    := id_ex.rd_addr
@@ -305,17 +323,16 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   ex_mem.memToReg   := id_ex.memToReg
   ex_mem.pc_plus_4  := id_ex.pc + 4.U
   ex_mem.jump       := id_ex.jump
-  ex_mem.jumpReg := id_ex.jumpReg
+  ex_mem.jumpReg    := id_ex.jumpReg
   ex_mem.pc         := id_ex.pc
   ex_mem.imm        := id_ex.imm
   ex_mem.auipc      := id_ex.auipc
   ex_mem.csr_data   := csrModule.io.csr_data_out
   ex_mem.is_csr     := (id_ex.csr_op =/= 0.U)
-
-  // Load/Store Signals
   ex_mem.loadType     := id_ex.loadType
   ex_mem.loadUnsigned := id_ex.loadUnsigned
   ex_mem.storeType    := id_ex.storeType
+}
 
   // ==============================================================================
   // MEM STAGE (Memory Access)
@@ -358,9 +375,11 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
 
 
   // Update MEM/WB Register
-  mem_wb.result   := wb_data
-  mem_wb.rd_addr  := ex_mem.rd_addr
-  mem_wb.regWrite := ex_mem.regWrite
+  when(!hazard.io.stall) {
+    mem_wb.result   := wb_data
+    mem_wb.rd_addr  := ex_mem.rd_addr
+    mem_wb.regWrite := ex_mem.regWrite
+  }
 
   // ==============================================================================
   // WB STAGE (Write Back)

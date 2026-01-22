@@ -43,7 +43,7 @@ class HazardUnit extends Module {
   io.mispredicted := misprediction
 
   // Control Hazard: Branch Taken
-  when(io.branch_taken || misprediction) {
+  when(misprediction) {
     io.flush := true.B
   }
 }

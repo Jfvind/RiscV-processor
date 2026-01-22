@@ -3,7 +3,7 @@ package core
 import chisel3._
 import chisel3.util._
 
-class MemoryMapping extends Module {
+class MemoryMapping(programFile: String = "") extends Module {
   val io = IO(new Bundle {
     // Signals from Core
     val address   = Input(UInt(32.W))
@@ -31,7 +31,7 @@ class MemoryMapping extends Module {
   })
 
   // Instantiate real DataMemory (RAM)
-  val dataMem = Module(new DataMemory())
+  val dataMem = Module(new DataMemory(programFile = programFile))
 
   // --- ADDRESS MAPPING ---
   // We define everything form 0x8000 and up is for Instruction-mem

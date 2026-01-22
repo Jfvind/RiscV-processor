@@ -27,19 +27,14 @@ class BranchPredictor extends Module {
 
   // --- Pattern History Table (PHT) ---
   // 2-bit saturating counters: 00=Strong NT, 01=Weak NT, 10=Weak T, 11=Strong T
-  val pht = Mem(16, UInt(2.W))
-
-  // Initialize PHT to "Weakly Not Taken" (01)
-  for (i <- 0 until 16) {
-    pht.write(i.U, 1.U)
-  }
+  val pht = RegInit(VecInit(Seq.fill(16)(1.U(2.W))))
 
   // === PREDICTION (Fetch Stage) ===
   val fetch_index = io.fetch_pc(5, 2)  // 4-bit index
   val fetch_tag = io.fetch_pc(31, 4)   // 28-bit tag
 
   val btb_hit = btb_valid(fetch_index) && (btb_tags(fetch_index) === fetch_tag)
-  val counter = pht.read(fetch_index)
+  val counter = pht(fetch_index)
 
   // Predict taken if counter >= 2 (Weakly/Strongly Taken)
   io.predict_taken := btb_hit && counter(1)
@@ -58,7 +53,7 @@ class BranchPredictor extends Module {
     }
 
     // Update PHT (2-bit saturating counter)
-    val old_counter = pht.read(update_index)
+    val old_counter = pht(update_index)
     val new_counter = WireDefault(old_counter)
 
     when(io.update_taken) {
@@ -69,6 +64,6 @@ class BranchPredictor extends Module {
       new_counter := Mux(old_counter === 0.U, 0.U, old_counter - 1.U)
     }
 
-    pht.write(update_index, new_counter)
+    pht(update_index) := new_counter
   }
 }
