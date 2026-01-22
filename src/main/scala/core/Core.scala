@@ -260,7 +260,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
 
   // Jump target (same calculation for both branch and JAL)
   val jump_target = Mux(id_ex.jumpReg,
-    (forwardA_data + id_ex.imm) & ~1.U,  // JALR: (rs1 + imm) & ~1
+    (forwardA_data + id_ex.imm) & ~1.U(32.W),  // JALR: (rs1 + imm) & ~1
     id_ex.pc + id_ex.imm                  // JAL:  PC + imm
   )
 
