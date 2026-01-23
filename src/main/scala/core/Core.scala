@@ -461,10 +461,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val if_id_instr = RegInit(0x00000013.U(32.W)) // Init with NOP
 
   when(hazard.io.flush) {
-    // CRITICAL FIX: Do not zero out PC on flush, just NOP the instruction.
-    // Zeroing PC causes calculation errors in pipeline.
     if_id_instr := 0x00000013.U 
-    // if_id_pc keeps its value (or update it? It doesn't matter for a bubble)
   }.elsewhen(!hazard.io.stall) {
     if_id_pc    := fetch.io.pc
     if_id_instr := fetch.io.instruction
@@ -478,7 +475,48 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   regFile.io.rs1_addr := if_id_instr(19, 15)
   regFile.io.rs2_addr := if_id_instr(24, 20)
 
-  // ID/EX Pipeline Register
+  // --- BRANCH RESOLUTION IN ID ---
+  val rs1_val = regFile.io.rs1_data
+  val rs2_val = regFile.io.rs2_data
+
+  val is_equal = (rs1_val === rs2_val)
+  val is_less_signed = (rs1_val.asSInt < rs2_val.asSInt)
+  val is_less_unsigned = (rs1_val < rs2_val)
+
+  val branchConditionMet = MuxLookup(if_id_instr(14, 12), false.B)(Seq(
+    "b000".U -> is_equal,              // BEQ
+    "b001".U -> !is_equal,             // BNE
+    "b100".U -> is_less_signed,        // BLT
+    "b101".U -> !is_less_signed,       // BGE
+    "b110".U -> is_less_unsigned,      // BLTU
+    "b111".U -> !is_less_unsigned      // BGEU
+  ))
+
+  val branch_taken = decode.io.branch && branchConditionMet && !hazard.io.stall
+  val jump_taken   = decode.io.jump && !hazard.io.stall
+  val pc_change    = branch_taken || jump_taken
+
+  val jump_target = if_id_pc + decode.io.imm 
+
+  // --- CONNECT FETCH UNIT (Partial) ---
+  fetch.io.branch_taken   := pc_change
+  fetch.io.jump_target_pc := jump_target
+  fetch.io.stall          := hazard.io.stall
+  fetch.io.write_en       := memIO.io.imemWriteEn
+  fetch.io.write_addr     := memIO.io.imemWriteAddr
+  fetch.io.predict_taken     := branchPredictor.io.predict_taken
+  fetch.io.predicted_target  := branchPredictor.io.predicted_target
+  
+  branchPredictor.io.fetch_pc      := fetch.io.pc
+  branchPredictor.io.update_valid  := true.B
+  branchPredictor.io.update_pc     := if_id_pc
+  branchPredictor.io.update_taken  := pc_change
+  branchPredictor.io.update_target := jump_target
+  branchPredictor.io.is_branch     := decode.io.branch
+
+  // ==============================================================================
+  // ID/EX PIPELINE REGISTER
+  // ==============================================================================
   class ID_EX_Bundle extends Bundle {
     val pc       = UInt(32.W)
     val rs1_data = UInt(32.W)
@@ -509,11 +547,9 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val id_ex = RegInit(0.U.asTypeOf(new ID_EX_Bundle))
 
   when(hazard.io.flush || hazard.io.stall) {
-    // CRITICAL FIX: When inserting a bubble, valid signals must be 0, 
-    // but PC should probably stay safe (though it matters less here as control signals are 0)
     val bubble = Wire(new ID_EX_Bundle)
     bubble := 0.U.asTypeOf(new ID_EX_Bundle)
-    bubble.pc := if_id_pc // Pass through PC to avoid "0" jumps if logic glitches
+    bubble.pc := if_id_pc 
     id_ex := bubble
   } .otherwise {
     id_ex.pc        := if_id_pc
@@ -553,20 +589,15 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     val regWrite   = Bool()
     val memWrite   = Bool()
     val memToReg   = Bool()
-    val pc_plus_4  = UInt(32.W)
-    val jump       = Bool()
-    val jumpReg    = Bool()
     val pc         = UInt(32.W)
-    val imm        = UInt(32.W)
-    val auipc      = Bool()
-    val csr_data   = UInt(32.W)
-    val is_csr     = Bool()
     val loadType      = UInt(3.W)
     val loadUnsigned  = Bool()
     val storeType     = UInt(3.W)
+    // OPTIMIZATION: Store the PRE-CALCULATED result here to save timing in MEM/Forwarding
+    val res_val    = UInt(32.W)
   }
   val ex_mem = RegInit(0.U.asTypeOf(new EX_MEM_Bundle))
-
+  
   class MEM_WB_Bundle extends Bundle {
     val result   = UInt(32.W)
     val rd_addr  = UInt(5.W)
@@ -583,21 +614,27 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   forwarding.io.mem_wb_rd       := mem_wb.rd_addr
   forwarding.io.mem_wb_regWrite := mem_wb.regWrite
 
+  // Forwarding Mux (Optimized)
   val forwardA_data = MuxLookup(forwarding.io.forwardA, id_ex.rs1_data)(Seq(
     0.U -> id_ex.rs1_data,
     1.U -> mem_wb.result,
-    2.U -> wb_data
+    // CRITICAL FIX: Forward the pre-calculated result directly from register.
+    // This removes the MEM-stage logic delay from the critical path.
+    2.U -> ex_mem.res_val 
   ))
+
   val forwardB_data = MuxLookup(forwarding.io.forwardB, id_ex.rs2_data)(Seq(
     0.U -> id_ex.rs2_data,
     1.U -> mem_wb.result,
-    2.U -> wb_data
+    2.U -> ex_mem.res_val
   ))
 
+  // ALU Ops
   alu.io.alu_op := id_ex.alu_op
   alu.io.alu_a  := Mux(id_ex.auipc, id_ex.pc, forwardA_data)
   alu.io.alu_b  := Mux(id_ex.aluSrc, id_ex.imm, forwardB_data)
 
+  // CSR Ops
   csrModule.io.csr_addr    := id_ex.csr_addr
   csrModule.io.csr_op      := id_ex.csr_op
   csrModule.io.csr_data_in := Mux(id_ex.csr_src_imm, id_ex.imm, forwardA_data)
@@ -606,47 +643,17 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   csrModule.io.cause_in     := 0.U
   csrModule.io.trap_trigger := false.B
 
-  val branchConditionMet = MuxLookup(id_ex.funct3, false.B)(Seq(
-    "b000".U -> alu.io.zero,
-    "b001".U -> !alu.io.zero,
-    "b100".U -> alu.io.less_signed,
-    "b101".U -> !alu.io.less_signed,
-    "b110".U -> alu.io.less_unsigned,
-    "b111".U -> !alu.io.less_unsigned
+  // --- RESULT SELECTION IN EX STAGE (PIPELINED MUX) ---
+  // We calculate the final writeback value (except for Loads) here in EX
+  val pc_plus_4 = id_ex.pc + 4.U
+  val auipc_res = id_ex.pc + id_ex.imm
+  val is_csr    = (id_ex.csr_op =/= 0.U)
+  
+  val ex_result = MuxCase(alu.io.result, Seq(
+    id_ex.jump  -> pc_plus_4,
+    id_ex.auipc -> auipc_res,
+    is_csr      -> csrModule.io.csr_data_out
   ))
-
-  val branch_taken = id_ex.branch && branchConditionMet
-  val jump_taken = id_ex.jump
-  val pc_change = branch_taken || jump_taken
-
-  val jump_target = Mux(id_ex.jumpReg,
-    (forwardA_data + id_ex.imm) & ~1.U(32.W),
-    id_ex.pc + id_ex.imm
-  )
-
-  branchPredictor.io.update_valid  := true.B
-  branchPredictor.io.update_pc     := id_ex.pc
-  branchPredictor.io.update_taken  := pc_change
-  branchPredictor.io.update_target := jump_target
-  branchPredictor.io.is_branch     := id_ex.branch
-
-  fetch.io.branch_taken   := pc_change
-  fetch.io.jump_target_pc := jump_target
-  fetch.io.stall          := hazard.io.stall
-  fetch.io.halt           := id_ex.halt
-  fetch.io.write_en       := memIO.io.imemWriteEn
-  fetch.io.write_addr     := memIO.io.imemWriteAddr
-  fetch.io.write_data     := ex_mem.rs2_data
-  fetch.io.predict_taken     := branchPredictor.io.predict_taken
-  fetch.io.predicted_target  := branchPredictor.io.predicted_target
-  branchPredictor.io.fetch_pc := fetch.io.pc
-
-  hazard.io.branch_taken := pc_change
-  hazard.io.predicted_taken := branchPredictor.io.predict_taken
-  hazard.io.id_ex_memToReg   := id_ex.memToReg
-  hazard.io.id_ex_rd         := id_ex.rd_addr
-  hazard.io.if_id_rs1        := if_id_instr(19, 15)
-  hazard.io.if_id_rs2        := if_id_instr(24, 20)
 
   // EX/MEM Update
   ex_mem.alu_result := alu.io.result
@@ -655,17 +662,11 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   ex_mem.regWrite   := id_ex.regWrite
   ex_mem.memWrite   := id_ex.memWrite
   ex_mem.memToReg   := id_ex.memToReg
-  ex_mem.pc_plus_4  := id_ex.pc + 4.U
-  ex_mem.jump       := id_ex.jump
-  ex_mem.jumpReg    := id_ex.jumpReg
   ex_mem.pc         := id_ex.pc
-  ex_mem.imm        := id_ex.imm
-  ex_mem.auipc      := id_ex.auipc
-  ex_mem.csr_data   := csrModule.io.csr_data_out
-  ex_mem.is_csr     := (id_ex.csr_op =/= 0.U)
-  ex_mem.loadType      := id_ex.loadType
-  ex_mem.loadUnsigned  := id_ex.loadUnsigned
-  ex_mem.storeType     := id_ex.storeType
+  ex_mem.loadType     := id_ex.loadType
+  ex_mem.loadUnsigned := id_ex.loadUnsigned
+  ex_mem.storeType    := id_ex.storeType
+  ex_mem.res_val      := ex_result // Store the Muxed result
 
   // ==============================================================================
   // MEM STAGE
@@ -685,12 +686,11 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val is_uart_status = (ex_mem.alu_result === 0x1004.U)
   val uart_status_word = Cat(0.U(31.W), uart.io.channel.ready)
 
-  wb_data := MuxCase(ex_mem.alu_result, Seq(
-    ex_mem.jump      -> ex_mem.pc_plus_4,
-    ex_mem.auipc     -> (ex_mem.pc + ex_mem.imm),
-    ex_mem.is_csr    -> ex_mem.csr_data,
-    ex_mem.memToReg  -> Mux(is_uart_status, uart_status_word, memReadData)
-  ))
+  // SIMPLIFIED WRITEBACK LOGIC
+  // Just choose between Memory Data (Loads) and the pre-calculated Result (Everything else)
+  wb_data := Mux(ex_mem.memToReg, 
+                Mux(is_uart_status, uart_status_word, memReadData), 
+                ex_mem.res_val)
 
   mem_wb.result   := wb_data
   mem_wb.rd_addr  := ex_mem.rd_addr
@@ -703,7 +703,28 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   regFile.io.rd_data   := mem_wb.result
   regFile.io.reg_write := mem_wb.regWrite
 
-  // DEBUG
+  // ==============================================================================
+  // WIRING
+  // ==============================================================================
+  hazard.io.rs1            := if_id_instr(19, 15)
+  hazard.io.rs2            := if_id_instr(24, 20)
+  hazard.io.is_branch      := decode.io.branch
+  hazard.io.is_jalr        := decode.io.jumpReg
+  hazard.io.id_ex_rd       := id_ex.rd_addr
+  hazard.io.id_ex_regWrite := id_ex.regWrite
+  hazard.io.id_ex_memToReg := id_ex.memToReg
+  hazard.io.ex_mem_rd      := ex_mem.rd_addr
+  hazard.io.ex_mem_regWrite:= ex_mem.regWrite
+  hazard.io.branch_taken   := branch_taken
+  hazard.io.jump_taken     := jump_taken
+  hazard.io.predicted_taken := branchPredictor.io.predict_taken 
+
+  fetch.io.halt       := id_ex.halt
+  fetch.io.write_data := ex_mem.rs2_data
+
+  // ==============================================================================
+  // DEBUG OUTPUTS
+  // ==============================================================================
   io.pc_out      := if_id_pc
   io.instruction := if_id_instr
   io.alu_res     := ex_mem.alu_result

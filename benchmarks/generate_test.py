@@ -3,7 +3,7 @@ import struct
 def write_line(f, val):
     f.write(f"{val:08x}\n")
 
-# Encoders
+# --- ENCODERS ---
 def encode_i_type(opcode, funct3, rd, rs1, imm):
     if imm < 0: imm = (1 << 12) + imm
     val = (imm << 20) | (rs1 << 15) | (funct3 << 12) | (rd << 7) | opcode
@@ -16,7 +16,6 @@ def encode_s_type(opcode, funct3, rs1, rs2, imm):
 
 def encode_b_type(opcode, funct3, rs1, rs2, imm):
     if imm < 0: imm = (1 << 13) + imm
-    # B-Type Scrambling
     bit_12   = (imm >> 12) & 1
     bit_11   = (imm >> 11) & 1
     bit_10_5 = (imm >> 5)  & 0x3F
@@ -37,53 +36,62 @@ def encode_j_type(opcode, rd, imm):
     val = (bit_20 << 31) | (bit_10_1 << 21) | (bit_11 << 20) | (bit_19_12 << 12) | (rd << 7) | opcode
     return val
 
-# Opcodes
-LUI = 0x37; ADDI = 0x13; SW = 0x23; BEQ = 0x63; JAL = 0x6F
-x0=0; x1=1; x2=2; x3=3; x8=8; x9=9
+# --- OPCODES ---
+LUI = 0x37; ADDI = 0x13; SW = 0x23; LW = 0x03; BEQ = 0x63; JAL = 0x6F
+x0=0; x1=1; x2=2; x3=3; x4=4; x5=5; x8=8; x9=9
 
 prog = []
 
-# 1. SETUP: x1 = 0x1000 (UART Base)
+# 1. SETUP
+# x1 = 0x1000 (UART Base Address)
 prog.append(encode_u_type(LUI, x1, 1)) 
 
-def print_safe(char):
-    # Load Char
-    prog.append(encode_i_type(ADDI, 0, x2, x0, ord(char)))
-    # Store to UART
-    prog.append(encode_s_type(SW, 2, x1, x2, 0))
-    
-    # DELAY LOOP SETUP
-    # Use LUI to load 4096 (0x1000) into x3. Safe 32-bit instruction.
-    prog.append(encode_u_type(LUI, x3, 1)) 
-    
-    # --- LOOP START ---
-    # Decrement x3 (x3 = x3 - 1)
-    prog.append(encode_i_type(ADDI, 0, x3, x3, -1))
-    
-    # NOPs (Safety)
-    prog.append(encode_i_type(ADDI, 0, x0, x0, 0))
-    prog.append(encode_i_type(ADDI, 0, x0, x0, 0))
-    
-    # Branch if x3 != 0 (Back to Decrement)
-    # Current instr is at Offset 0. 
-    # We need to jump back 3 instructions (BNE itself + 2 NOPs + ADDI).
-    # 3 instructions * 4 bytes = 12 bytes. Offset = -12.
-    prog.append(encode_b_type(BEQ, 1, x3, x0, -12))
-    # --- LOOP END ---
+# x4 = 'A' (Initial Char 65)
+prog.append(encode_i_type(ADDI, 0, x4, x0, 65))
 
-# 2. Print Sequence
-print_safe('A')
-print_safe('B')
-print_safe('C')
-print_safe('\r')
-print_safe('\n')
+# x5 = 'Z' + 1 (Limit 91)
+prog.append(encode_i_type(ADDI, 0, x5, x0, 91))
 
-# 3. LED ON
+# --- MAIN LOOP START (Label: LOOP_CHAR) ---
+# We are currently at instruction index 3.
+
+# --- POLLING SUB-LOOP START (Label: WAIT_TX) ---
+# 2. Read UART Status (Address 0x1004 = x1 + 4)
+# LW x2, 4(x1)
+prog.append(encode_i_type(LW, 2, x2, x1, 4))
+
+# 3. Check Ready Bit (Bit 0)
+# ANDI x2, x2, 1
+prog.append(encode_i_type(ADDI, 7, x2, x2, 1)) # funct3=7 is ANDI
+
+# 4. Branch if NOT Ready (x2 == 0) -> Jump back to LW
+# We are at index 5. Jump back to index 3 (LW). 
+# Difference is -2 instructions. -2 * 4 = -8 bytes.
+prog.append(encode_b_type(BEQ, 0, x2, x0, -8))
+# --- POLLING SUB-LOOP END ---
+
+# 5. Print Character
+# SW x4, 0(x1)
+prog.append(encode_s_type(SW, 2, x1, x4, 0))
+
+# 6. Increment Character
+# ADDI x4, x4, 1
+prog.append(encode_i_type(ADDI, 0, x4, x4, 1))
+
+# 7. Loop Check (If x4 != x5, jump back to POLLING Start)
+# We are at index 8. The start of the main loop is index 3 (LW instruction).
+# Difference is 5 instructions. 5 * 4 = 20 bytes.
+# Jump Offset = -20.
+# Use BNE (BEQ opcode + funct3=1)
+prog.append(encode_b_type(BEQ, 1, x4, x5, -20))
+# --- MAIN LOOP END ---
+
+# 8. LED ON (Success Indication)
 prog.append(encode_i_type(ADDI, 0, x8, x0, 100))
 prog.append(encode_i_type(ADDI, 0, x9, x0, 1))
 prog.append(encode_s_type(SW, 2, x8, x9, 0))
 
-# 4. Infinite Loop
+# 9. Infinite Loop
 prog.append(encode_j_type(JAL, x0, 0))
 
 # Write File
