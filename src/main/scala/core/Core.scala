@@ -54,7 +54,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val forwarding = Module(new ForwardingUnit())
   val hazard     = Module(new HazardUnit())
   //val serialPort = Module(new Serialport())
-  val uart       = Module(new BufferedTx(50000000, 115200))
+  val uart       = Module(new BufferedTx(25000000, 115200))
   //val uart         = Module(new BufferedTx(100000000, 10000000)) // For faster simulation TODO: Change back to 115200 for real use
   val csrModule  = Module(new CSRModule())
   val branchPredictor = Module(new BranchPredictor())

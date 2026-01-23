@@ -13,10 +13,10 @@ class Top extends Module {
   // --- CLOCK DIVIDER (Fixer -8ns slack problemet) ---
   // Vi tæller op: 00 -> 01 -> 10 -> 11 ...
   // Bit 1 (counter(1)) skifter hver 4. cyklus -> 100 MHz / 2 = 50 MHz
-  val counter = RegInit(0.U(1.W))
+  val counter = RegInit(0.U(2.W))
   counter := counter + 1.U
   
-  val slowClock = counter(0).asClock
+  val slowClock = counter(1).asClock
 
   // --- CORE INSTANTIATION ---
   // Vi pakker Core ind i 'withClock', så den kører på 25 MHz
