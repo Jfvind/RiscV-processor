@@ -9,9 +9,9 @@ class PrimeDiagnosticTest extends AnyFlatSpec with ChiselScalatestTester {
       println("\n--- START AF OPTIMERET DIAGNOSE (1000 CYKLUSSER) ---")
       var uartLog = ""
       
-      dut.clock.setTimeout(2000)
+      dut.clock.setTimeout(20000)
 
-      for (cycle <- 0 until 1000) {
+      for (cycle <- 0 until 10000) {
         val pc    = dut.io.pc_out.peek().litValue
         val instr = dut.io.instruction.peek().litValue
         val sp    = dut.io.debug_x2.peek().litValue
@@ -21,6 +21,7 @@ class PrimeDiagnosticTest extends AnyFlatSpec with ChiselScalatestTester {
         val stall = dut.io.debug_stall.peek().litToBoolean
         val uartV = dut.io.uartValid.peek().litToBoolean
         val uartD = dut.io.uartData.peek().litValue
+        val aluRes = dut.io.alu_res.peek().litValue
         
         // Opsaml UART data
         if (uartV) {
@@ -44,6 +45,11 @@ class PrimeDiagnosticTest extends AnyFlatSpec with ChiselScalatestTester {
                            else ""
 
             println(f"Cycle $cycle%-4d | PC: 0x$pc%08X | Instr: 0x$instr%08X | SP: 0x$sp%08X | a0: 0x$a0%08X | mcycle: $cycleCount | F: $flush | S: $stall$eventTag")
+        }
+
+        // Vi printer ALU resultatet hver 25. cyklus, eller når der sker noget vigtigt
+        if (cycle % 25 == 0 || uartV || flush) {
+            println(f"Cycle $cycle%-4d | ALU Res (Addr/Target): 0x$aluRes%08X")
         }
 
         dut.clock.step(1)

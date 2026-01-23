@@ -21,6 +21,7 @@ class CSRModule extends Module {
     val csr_data_out = Output(UInt(32.W))
     val epc_out      = Output(UInt(32.W))
     val trap_vector  = Output(UInt(32.W))
+    val mcycle_out   = Output(UInt(32.W))
   })
 
   // --- 1. Define Actual Registers ---
@@ -116,4 +117,5 @@ class CSRModule extends Module {
       is(0xB82.U) { minstret := Cat(wdata, minstret(31,0)) }
     }
   }
+  io.mcycle_out := mcycle(31, 0) // Forbind registeret direkte til den nye port
 }

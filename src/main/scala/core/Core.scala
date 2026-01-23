@@ -236,7 +236,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   )
 
   // Core events for CSR updates
-  csrModule.io.inst_retire  := mem_wb.regWrite  // Count retired instructions
+  csrModule.io.inst_retire  := !hazard.io.stall && !hazard.io.flush// Count retired instructions
   csrModule.io.pc_in        := id_ex.pc
   csrModule.io.cause_in     := 0.U  // No exceptions yet
   csrModule.io.trap_trigger := false.B  // No traps yet
@@ -405,5 +405,5 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   io.debug_branch_taken := pc_change
 
   // 3. Connect CSR Info
-  io.debug_mcycle       := csrModule.io.csr_data_out
+  io.debug_mcycle       := csrModule.io.mcycle_out
 }
