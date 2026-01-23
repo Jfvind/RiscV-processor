@@ -1,5 +1,133 @@
-/*
+// USER INPUT: CSR_TIMING and UART_ADDR
+// #define CSR_EN TRUE
+// #define UART_ADDR 0x00001000
+// #define DEBUG_EN
+// USER INPUT: UART_ADDR
+#define LED_ADDR  ((volatile int *) 0x0064)
+#define NUM_PRIMES 25 
 
+// Forward declaration of the C logic function
+void run_benchmark();
+
+// --- 1. STARTUP (NAKED) ---
+// This function ONLY sets up the stack and jumps to the logic.
+// It contains NO variables, solving your compilation error.
+__attribute__((section(".text.start"))) __attribute__((naked)) void _start() {
+    // 1. Initialize Stack Pointer (Top of 16KB)
+    __asm__ volatile("li sp, 0x4000"); 
+
+    // 2. Jump to the C logic (Linker resolves the short jump)
+    // We use a tail-call (jump) instead of call to save stack space
+    __asm__ volatile("j run_benchmark");
+}
+
+// --- MATH HELPERS (Inline) ---
+static inline unsigned int soft_mul(unsigned int a, unsigned int b) {
+    unsigned int res = 0;
+    while (b > 0) {
+        if (b & 1) res += a;
+        a <<= 1;
+        b >>= 1;
+    }
+    return res;
+}
+
+static inline unsigned int soft_mod(unsigned int a, unsigned int b) {
+    if (b == 0) return 0;
+    unsigned int r = 0;
+    for (int i = 31; i >= 0; i--) {
+        r <<= 1;
+        r |= (a >> i) & 1;
+        if (r >= b) {
+            r -= b;
+        }
+    }
+    return r;
+}
+
+static inline unsigned int soft_div(unsigned int a, unsigned int b) {
+    if (b == 0) return 0;
+    unsigned int q = 0;
+    unsigned int r = 0;
+    for (int i = 31; i >= 0; i--) {
+        r <<= 1;
+        r |= (a >> i) & 1;
+        if (r >= b) {
+            r -= b;
+            q |= (1 << i);
+        }
+    }
+    return q;
+}
+
+// --- 2. BENCHMARK LOGIC (STANDARD C) ---
+// This is a normal function. The compiler manages the stack for 'w', 'k', etc.
+// We force 'noinline' to ensure it doesn't get merged back into _start.
+__attribute__((noinline)) void run_benchmark() {
+    
+    // LED ON (Proof of life)
+    *((volatile int*)0x64) = 1;
+
+    // MANUAL UART SETUP
+    volatile int* uart_data = (volatile int*)0x1000;
+
+    // Print "GO"
+    *uart_data = 'G';
+    for(volatile int w=0; w<2000; w++) __asm__("nop");
+    *uart_data = 'O';
+    for(volatile int w=0; w<2000; w++) __asm__("nop");
+    *uart_data = '\r';
+    for(volatile int w=0; w<2000; w++) __asm__("nop");
+    *uart_data = '\n';
+    for(volatile int w=0; w<2000; w++) __asm__("nop");
+
+    unsigned int count = 0;
+    unsigned int num = 2;
+
+    while (count < NUM_PRIMES) {
+        int is_prime = 1;
+        
+        // Check prime
+        for (unsigned int i = 2; soft_mul(i, i) <= num; i++) {
+            if (soft_mod(num, i) == 0) {
+                is_prime = 0;
+                break;
+            }
+        }
+
+        if (is_prime) {
+            count++;
+            
+            // Print Number
+            unsigned int val = num;
+            if (val >= 100) {
+               *uart_data = '0' + soft_div(val, 100);
+               for(volatile int w=0; w<2000; w++) __asm__("nop");
+               val = soft_mod(val, 100);
+            }
+            if (val >= 10 || num >= 100) { 
+               *uart_data = '0' + soft_div(val, 10);
+               for(volatile int w=0; w<2000; w++) __asm__("nop");
+               val = soft_mod(val, 10);
+            }
+            *uart_data = '0' + val; 
+            for(volatile int w=0; w<2000; w++) __asm__("nop");
+            
+            *uart_data = ' '; 
+            for(volatile int w=0; w<2000; w++) __asm__("nop");
+        }
+        num++;
+    }
+
+    // DONE - BLINK LED
+    while(1) {
+        *((volatile int*)0x64) = 0; // OFF
+        for(volatile int k=0; k<1000000; k++); 
+        *((volatile int*)0x64) = 1; // ON
+        for(volatile int k=0; k<1000000; k++); 
+    }
+}
+/*
 // USER INPUT: CSR_TIMING and UART_ADDR
 // #define CSR_EN TRUE
 // #define UART_ADDR 0x00001000
@@ -14,9 +142,6 @@
 #define STARTBYTE 0xFF
 #define ENDBYTE 0xFE
 #define CSRByte 0xC5
-
-// Hardware Definitions
-#define LED_ADDR    ((volatile int *) 0x0064)
 
 // ###############################
 //  UTILS
@@ -133,15 +258,13 @@ void uart_read_line(volatile UART_t *uart, unsigned char *buffer, unsigned int m
 __attribute__((section(".text.start"))) __attribute__((naked)) void entry()
 {
     // We love that no stack pointer is initialized by default
-    __asm__ volatile("li sp, 0x00001000"); // Set stack pointer to top of memory
+    __asm__ volatile("li sp, 0x2FFF0"); // Set stack pointer to top of memory
     __asm__ volatile("jal ra, main");
     __asm__ volatile("ecall"); // infinite loop after main returns
 }
 
 int main()
 {
-    *LED_ADDR = 1;
-    
     volatile int start_time = 0;
     // INIT UART
     volatile UART_t *uart = get_uart(UART_ADDR);
@@ -223,171 +346,4 @@ int main()
 #endif
 
     return 0;
-}
-*/
-
-// USER INPUT: CSR_TIMING and UART_ADDR
-// #define CSR_EN TRUE
-// #define UART_ADDR 0x00001000
-// #define DEBUG_EN
-
-// Hardware Definitions
-#define LED_ADDR    ((volatile int *) 0x0064)
-
-#define NUM_PRIMES 10 // Reduce to 10 for a faster test run
-#define STARTBYTE 0xFF
-#define ENDBYTE 0xFE
-
-// --- UART UTILS ---
-typedef struct { volatile unsigned int DATA; volatile unsigned int STATUS; } UART_t;
-volatile UART_t *get_uart(unsigned int addr) { return (volatile UART_t *)addr; }
-
-void uart_write_char(volatile UART_t *uart, unsigned char c) {
-    // Wait for Ready (Bit 0)
-    while ((uart->STATUS & 0x1) == 0); 
-    uart->DATA = c;
-}
-
-void uart_write_string(volatile UART_t *uart, const char *str) {
-    while (*str) uart_write_char(uart, *str++);
-}
-
-// --- MATH HELPERS (Software Implementation) ---
-// Replaces 'i * i' to avoid hardware multiplier dependency issues
-unsigned int soft_mul(unsigned int a, unsigned int b) {
-    unsigned int res = 0;
-    while (b > 0) {
-        if (b & 1) res += a;
-        a <<= 1;
-        b >>= 1;
-    }
-    return res;
-}
-
-// Replaces '%' to avoid hardware division dependency issues
-unsigned int modulus(unsigned int a, unsigned int b) {
-    if (b == 0) return 0;
-    unsigned int rem = 0;
-    for (int i = 31; i >= 0; i--) {
-        unsigned int bit = (a >> i) & 1;
-        rem = (rem << 1) | bit;
-        if (rem >= b) rem -= b;
-    }
-    return rem;
-}
-
-// Helper for printing numbers
-unsigned int div_mod_10(unsigned int *n) {
-    unsigned int rem = 0;
-    unsigned int input = *n;
-    unsigned int divisor = 10;
-    unsigned int quo = 0;
-    for (int i = 31; i >= 0; i--) {
-        rem = (rem << 1) | ((input >> i) & 1);
-        if (rem >= divisor) {
-            rem -= divisor;
-            quo |= (1 << i);
-        }
-    }
-    *n = quo;
-    return rem;
-}
-
-void uart_write_int(volatile UART_t *uart, unsigned int value) {
-    char buffer[12];
-    char *ptr = &buffer[11];
-    *ptr = '\0';
-    if (value == 0) {
-        *--ptr = '0';
-    } else {
-        while (value != 0) {
-            unsigned int digit = div_mod_10(&value);
-            *--ptr = "0123456789"[digit];
-        }
-    }
-    uart_write_string(uart, ptr);
-}
-
-// --- ENTRY POINT ---
-__attribute__((section(".text.start"))) __attribute__((naked)) void entry() {
-    __asm__ volatile("li sp, 0x00001000");
-    __asm__ volatile("jal ra, main");
-    __asm__ volatile("1: j 1b");
-}
-
-/*
-// --- MAIN ---
-int main() {
-    // 1. Turn on LED immediately
-    *LED_ADDR = 1;
-
-    volatile UART_t *uart = get_uart(UART_ADDR);
-
-    // 2. Print 'A' for Alive immediately (Diagnostic)
-    uart_write_char(uart, 'A'); 
-    uart_write_string(uart, "\r\nStarting...\r\n");
-
-    unsigned int primes[NUM_PRIMES];
-    unsigned int count = 0;
-    unsigned int num = 2;
-
-    while (count < NUM_PRIMES) {
-        int is_prime = 1;
-        unsigned int i = 2;
-        unsigned int i_sq = 4; 
-
-        while (i_sq <= num) {
-            if (modulus(num, i) == 0) {
-                is_prime = 0;
-                break;
-            }
-            i++;
-            i_sq = soft_mul(i, i); 
-        }
-
-        if (is_prime) {
-            primes[count++] = num;
-            
-#ifdef DEBUG_EN
-            uart_write_string(uart, "Prime found: ");
-            uart_write_int(uart, num);
-            uart_write_string(uart, "\r\n");
-#endif
-        }
-        num++;
-    }
-
-    uart_write_string(uart, "Done.\r\n");
-
-    // 3. Visible Blink (1 Second delay at 25MHz)
-    // Loop count: 25,000,000 / 5 cycles per loop approx = ~5 million
-    while(1) {
-        *LED_ADDR = 0; // Off
-        for(volatile int k=0; k<2500000; k++); 
-        
-        *LED_ADDR = 1; // On
-        for(volatile int k=0; k<2500000; k++);
-    }
-
-    return 0;
-    
 }*/
-int main() {
-    volatile UART_t *uart = get_uart(UART_ADDR);
-    *LED_ADDR = 0; // Start OFF
-
-    // Send Alive Message
-    uart_write_char(uart, 'A'); 
-    uart_write_string(uart, "\r\nSystem 25MHz Alive\r\n");
-
-    // Loop forever with blink
-    while(1) {
-        *LED_ADDR = 1;
-        // 25,000,000 cycles / 5 ops = ~5 million loops for 1 sec
-        for(volatile int k=0; k<2500000; k++); 
-        
-        *LED_ADDR = 0;
-        for(volatile int k=0; k<2500000; k++);
-    }
-    return 0;
-}

@@ -1,22 +1,20 @@
+OUTPUT_ARCH( "riscv" )
+ENTRY(_start)
+
 SECTIONS
 {
-    . = 0x00000000;
-
-    .text : {
-        KEEP(*(.text.start)) /*We move main to start*/
-        *(.text*)
-        *(.rodata*)
-    }
-
-    .data : {
-        . = ALIGN(4);
-        *(.data*)
-    }
-
-    .bss : {
-        . = ALIGN(4);
-        *(.bss*)
-        *(COMMON)
-    }
-
+  . = 0x00000000;
+  .text : {
+    *(.text.start)
+    *(.text*)
+  }
+  .rodata : {
+    *(.rodata*)
+  }
+  .data : {
+    *(.data*)
+  }
+  .bss : {
+    *(.bss*)
+  }
 }

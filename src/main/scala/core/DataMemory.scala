@@ -109,10 +109,10 @@ class DataMemory extends Module {
 package core
 
 import chisel3._
-import chisel3.util.experimental.loadMemoryFromFileInline
 import chisel3.util._
+import chisel3.util.experimental.loadMemoryFromFileInline
 
-class DataMemory extends Module {
+class DataMemory(programFile: String = "") extends Module {
   val io = IO(new Bundle {
     val address   = Input(UInt(32.W))
     val writeData = Input(UInt(32.W))
@@ -123,65 +123,61 @@ class DataMemory extends Module {
     val storeType     = Input(UInt(3.W))
   })
 
-  // Async Memory (Mem) - Simpler timing, suitable for 25MHz
-  // Vec(4, UInt(8.W)) allows us to write individual bytes correctly
-  val memory = Mem(1024, Vec(4, UInt(8.W)))
-  
-  loadMemoryFromFileInline(memory, "prime_bench.mem")
+  // 32KB memory
+  val memory = Mem(8192, UInt(32.W))
 
+  // Load the file if provided
+  if (programFile.nonEmpty) {
+    loadMemoryFromFileInline(memory, programFile)
+  }
+  
   val wordAddr = io.address >> 2
   val byteOffset = io.address(1, 0)
-
-  // --- READ LOGIC (Async) ---
-  val readVec = memory.read(wordAddr)
-  val word = Cat(readVec(3), readVec(2), readVec(1), readVec(0))
-  
   val bitOffset = byteOffset * 8.U
+
+  // --- READ LOGIC ---
+  val word = memory.read(wordAddr)
   val shiftedWord = word >> bitOffset
-  
+
   val readDataRaw = Wire(UInt(32.W))
   readDataRaw := 0.U
 
   switch(io.loadType) {
-    is("b000".U) { readDataRaw := Mux(io.loadUnsigned, shiftedWord(7, 0), Cat(Fill(24, shiftedWord(7)), shiftedWord(7, 0))) } // LB
-    is("b001".U) { readDataRaw := Mux(io.loadUnsigned, shiftedWord(15, 0), Cat(Fill(16, shiftedWord(15)), shiftedWord(15, 0))) } // LH
+    is("b000".U) { // LB
+      val byte = shiftedWord(7, 0)
+      readDataRaw := Mux(io.loadUnsigned, byte, Cat(Fill(24, byte(7)), byte))
+    }
+    is("b001".U) { // LH
+      val half = shiftedWord(15, 0)
+      readDataRaw := Mux(io.loadUnsigned, half, Cat(Fill(16, half(15)), half))
+    }
     is("b010".U) { readDataRaw := word } // LW
     is("b100".U) { readDataRaw := shiftedWord(7, 0) } // LBU
     is("b101".U) { readDataRaw := shiftedWord(15, 0) } // LHU
   }
   io.readData := readDataRaw
 
-  // --- WRITE LOGIC (Fixing the SB/SH bug) ---
+  // --- WRITE LOGIC ---
   when(io.memWrite) {
-    val b0 = io.writeData(7, 0)
-    val b1 = io.writeData(15, 8)
-    val b2 = io.writeData(23, 16)
-    val b3 = io.writeData(31, 24)
-
-    val wMask = Wire(Vec(4, Bool()))
-    val wData = Wire(Vec(4, UInt(8.W)))
-
-    // Default: Write Nothing
-    wMask(0) := false.B; wMask(1) := false.B; wMask(2) := false.B; wMask(3) := false.B
-    wData(0) := 0.U; wData(1) := 0.U; wData(2) := 0.U; wData(3) := 0.U
+    val currentWord = memory.read(wordAddr)
+    val newWord = Wire(UInt(32.W))
+    newWord := currentWord 
 
     switch(io.storeType) {
       is("b000".U) { // SB
-        wMask(byteOffset) := true.B
-        wData(byteOffset) := b0 
+        val mask = ~(255.U(32.W) << bitOffset)
+        val data = (io.writeData(7, 0) << bitOffset)
+        newWord := (currentWord & mask) | data
       }
       is("b001".U) { // SH
-        wMask(byteOffset) := true.B
-        wMask(byteOffset + 1.U) := true.B
-        wData(byteOffset) := b0
-        wData(byteOffset + 1.U) := b1
+        val mask = ~(65535.U(32.W) << bitOffset)
+        val data = (io.writeData(15, 0) << bitOffset)
+        newWord := (currentWord & mask) | data
       }
       is("b010".U) { // SW
-        wMask(0) := true.B; wMask(1) := true.B; wMask(2) := true.B; wMask(3) := true.B
-        wData(0) := b0; wData(1) := b1; wData(2) := b2; wData(3) := b3
+        newWord := io.writeData
       }
     }
-    // Perform the masked write
-    memory.write(wordAddr, wData, wMask)
+    memory.write(wordAddr, newWord)
   }
 }

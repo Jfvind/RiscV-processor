@@ -78,52 +78,70 @@ class MemoryMapping extends Module {
 }
 */
 package core
+
 import chisel3._
 import chisel3.util._
 
-class MemoryMapping extends Module {
+// CRITICAL: Must accept programFile to allow hex loading
+class MemoryMapping(programFile: String = "") extends Module {
   val io = IO(new Bundle {
     val address   = Input(UInt(32.W))
     val writeData = Input(UInt(32.W))
     val memWrite  = Input(Bool())
-    val readData  = Output(UInt(32.W)) 
-    val led       = Output(UInt(1.W))  
+    
+    val readData  = Output(UInt(32.W))
+    val led       = Output(UInt(1.W))
+
+    // UART debug
     val uartData  = Output(UInt(32.W))
     val uartAddr  = Output(UInt(32.W))
     val uartValid = Output(Bool())
-    val imemWriteEn = Output(Bool())
+
+    // IMEM Writes
+    val imemWriteEn   = Output(Bool())
     val imemWriteAddr = Output(UInt(32.W))
-    // Removed isRam output
+
+    // Load/Store types
     val loadType      = Input(UInt(3.W))
     val loadUnsigned  = Input(Bool())
     val storeType     = Input(UInt(3.W))
   })
 
-  val dataMem = Module(new DataMemory())
+  // Instantiate DataMemory with the file path
+  val dataMem = Module(new DataMemory(programFile = programFile))
 
-  val isImemWrite = (io.address >= 0x8000.U)
-  val isLed = (io.address === 100.U)
+  // --- ADDRESS DECODING ---
+  val isImemWrite  = (io.address >= 0x8000.U)
+  val isLed        = (io.address === 100.U)
   val isUartData   = (io.address === 0x1000.U)
   val isUartStatus = (io.address === 0x1004.U)
   val isUart       = isUartData || isUartStatus
-  val isRam = !isLed && !isUart && !isImemWrite
+  val isRam        = !isLed && !isUart && !isImemWrite
 
+  // --- OUTPUTS ---
   io.imemWriteEn   := io.memWrite && isImemWrite
   io.imemWriteAddr := io.address - 0x8000.U
 
+  // RAM Connections
   dataMem.io.address   := io.address
   dataMem.io.writeData := io.writeData
   dataMem.io.memWrite  := io.memWrite && isRam
-  io.readData := dataMem.io.readData
-
+  
+  // Forward Load/Store types only if accessing RAM
   dataMem.io.loadType     := Mux(isRam, io.loadType, 0.U)
   dataMem.io.loadUnsigned := Mux(isRam, io.loadUnsigned, false.B)
   dataMem.io.storeType    := Mux(isRam, io.storeType, 0.U)
+  
+  io.readData := dataMem.io.readData
 
+  // LED Logic
   val ledReg = RegInit(0.U(1.W))
-  when(io.memWrite && isLed) { ledReg := io.writeData(0) }
+  when(io.memWrite && isLed) {
+    ledReg := io.writeData(0)
+  }
   io.led := ledReg
 
+  // UART Logic
   io.uartValid := io.memWrite && isUartData
   io.uartAddr  := io.address
   io.uartData  := io.writeData
