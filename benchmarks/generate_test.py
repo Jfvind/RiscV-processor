@@ -65,8 +65,6 @@ prog.append(encode_i_type(LW, 2, x2, x1, 4))
 prog.append(encode_i_type(ADDI, 7, x2, x2, 1)) # funct3=7 is ANDI
 
 # 4. Branch if NOT Ready (x2 == 0) -> Jump back to LW
-# We are at index 5. Jump back to index 3 (LW). 
-# Difference is -2 instructions. -2 * 4 = -8 bytes.
 prog.append(encode_b_type(BEQ, 0, x2, x0, -8))
 # --- POLLING SUB-LOOP END ---
 
@@ -79,9 +77,7 @@ prog.append(encode_s_type(SW, 2, x1, x4, 0))
 prog.append(encode_i_type(ADDI, 0, x4, x4, 1))
 
 # 7. Loop Check (If x4 != x5, jump back to POLLING Start)
-# We are at index 8. The start of the main loop is index 3 (LW instruction).
-# Difference is 5 instructions. 5 * 4 = 20 bytes.
-# Jump Offset = -20.
+# Jump Offset = -20 bytes.
 # Use BNE (BEQ opcode + funct3=1)
 prog.append(encode_b_type(BEQ, 1, x4, x5, -20))
 # --- MAIN LOOP END ---

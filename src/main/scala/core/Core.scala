@@ -450,7 +450,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val memIO       = Module(new MemoryMapping(programFile = programFile))
   val forwarding  = Module(new ForwardingUnit())
   val hazard      = Module(new HazardUnit())
-  val uart        = Module(new BufferedTx(100000000, 115200))
+  val uart        = Module(new BufferedTx(25000000, 115200))
   val csrModule   = Module(new CSRModule())
   val branchPredictor = Module(new BranchPredictor())
 
@@ -492,6 +492,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     "b111".U -> !is_less_unsigned      // BGEU
   ))
 
+  // Branch depends on !stall to ensure we have valid register data
   val branch_taken = decode.io.branch && branchConditionMet && !hazard.io.stall
   val jump_taken   = decode.io.jump && !hazard.io.stall
   val pc_change    = branch_taken || jump_taken
@@ -593,7 +594,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
     val loadType      = UInt(3.W)
     val loadUnsigned  = Bool()
     val storeType     = UInt(3.W)
-    // OPTIMIZATION: Store the PRE-CALCULATED result here to save timing in MEM/Forwarding
+    // TIMING OPTIMIZATION: Store pre-calculated result here
     val res_val    = UInt(32.W)
   }
   val ex_mem = RegInit(0.U.asTypeOf(new EX_MEM_Bundle))
@@ -614,27 +615,21 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   forwarding.io.mem_wb_rd       := mem_wb.rd_addr
   forwarding.io.mem_wb_regWrite := mem_wb.regWrite
 
-  // Forwarding Mux (Optimized)
   val forwardA_data = MuxLookup(forwarding.io.forwardA, id_ex.rs1_data)(Seq(
     0.U -> id_ex.rs1_data,
     1.U -> mem_wb.result,
-    // CRITICAL FIX: Forward the pre-calculated result directly from register.
-    // This removes the MEM-stage logic delay from the critical path.
-    2.U -> ex_mem.res_val 
+    2.U -> ex_mem.res_val // Forward pre-calc result
   ))
-
   val forwardB_data = MuxLookup(forwarding.io.forwardB, id_ex.rs2_data)(Seq(
     0.U -> id_ex.rs2_data,
     1.U -> mem_wb.result,
     2.U -> ex_mem.res_val
   ))
 
-  // ALU Ops
   alu.io.alu_op := id_ex.alu_op
   alu.io.alu_a  := Mux(id_ex.auipc, id_ex.pc, forwardA_data)
   alu.io.alu_b  := Mux(id_ex.aluSrc, id_ex.imm, forwardB_data)
 
-  // CSR Ops
   csrModule.io.csr_addr    := id_ex.csr_addr
   csrModule.io.csr_op      := id_ex.csr_op
   csrModule.io.csr_data_in := Mux(id_ex.csr_src_imm, id_ex.imm, forwardA_data)
@@ -643,8 +638,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   csrModule.io.cause_in     := 0.U
   csrModule.io.trap_trigger := false.B
 
-  // --- RESULT SELECTION IN EX STAGE (PIPELINED MUX) ---
-  // We calculate the final writeback value (except for Loads) here in EX
+  // --- RESULT SELECTION (Pipelined) ---
   val pc_plus_4 = id_ex.pc + 4.U
   val auipc_res = id_ex.pc + id_ex.imm
   val is_csr    = (id_ex.csr_op =/= 0.U)
@@ -666,7 +660,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   ex_mem.loadType     := id_ex.loadType
   ex_mem.loadUnsigned := id_ex.loadUnsigned
   ex_mem.storeType    := id_ex.storeType
-  ex_mem.res_val      := ex_result // Store the Muxed result
+  ex_mem.res_val      := ex_result
 
   // ==============================================================================
   // MEM STAGE
@@ -686,8 +680,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   val is_uart_status = (ex_mem.alu_result === 0x1004.U)
   val uart_status_word = Cat(0.U(31.W), uart.io.channel.ready)
 
-  // SIMPLIFIED WRITEBACK LOGIC
-  // Just choose between Memory Data (Loads) and the pre-calculated Result (Everything else)
+  // Select between Memory Data (Loads) and Pre-calculated Result
   wb_data := Mux(ex_mem.memToReg, 
                 Mux(is_uart_status, uart_status_word, memReadData), 
                 ex_mem.res_val)
@@ -704,17 +697,20 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   regFile.io.reg_write := mem_wb.regWrite
 
   // ==============================================================================
-  // WIRING
+  // WIRING (Consolidated)
   // ==============================================================================
   hazard.io.rs1            := if_id_instr(19, 15)
   hazard.io.rs2            := if_id_instr(24, 20)
   hazard.io.is_branch      := decode.io.branch
   hazard.io.is_jalr        := decode.io.jumpReg
+  
   hazard.io.id_ex_rd       := id_ex.rd_addr
   hazard.io.id_ex_regWrite := id_ex.regWrite
   hazard.io.id_ex_memToReg := id_ex.memToReg
+  
   hazard.io.ex_mem_rd      := ex_mem.rd_addr
   hazard.io.ex_mem_regWrite:= ex_mem.regWrite
+  
   hazard.io.branch_taken   := branch_taken
   hazard.io.jump_taken     := jump_taken
   hazard.io.predicted_taken := branchPredictor.io.predict_taken 
@@ -722,9 +718,7 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   fetch.io.halt       := id_ex.halt
   fetch.io.write_data := ex_mem.rs2_data
 
-  // ==============================================================================
-  // DEBUG OUTPUTS
-  // ==============================================================================
+  // Debug
   io.pc_out      := if_id_pc
   io.instruction := if_id_instr
   io.alu_res     := ex_mem.alu_result
@@ -732,7 +726,6 @@ class Core(program: Seq[UInt] = Seq(), programFile: String = "") extends Module 
   io.uartData    := memIO.io.uartData
   io.uartAddr    := memIO.io.uartAddr
   io.uartValid   := memIO.io.uartValid
-
   io.debug_x1  := regFile.io.debug_x1
   io.debug_x2  := regFile.io.debug_x2
   io.debug_x3  := regFile.io.debug_x3

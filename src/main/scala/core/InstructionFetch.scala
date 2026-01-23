@@ -133,26 +133,20 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
     val instruction      = Output(UInt(32.W))
   })
 
-  // === 1. SYNC MEMORY (BRAM) ===
-  val ramSize = 8192 
+  // 1. MEMORY
+  val ramSize = 8192
   val ram = SyncReadMem(ramSize, UInt(32.W))
-
-  if (programFile.nonEmpty) {
-    loadMemoryFromFileInline(ram, programFile)
-  }
-
-  // Support for List-based programs (for Unit Tests)
+  if (programFile.nonEmpty) { loadMemoryFromFileInline(ram, programFile) }
+  
+  // Test ROM support
   val hasTestProgram = (program.nonEmpty).B
   val testRomContent = if (program.nonEmpty) program else Seq.fill(4)(0.U(32.W))
   val testRom = VecInit(testRomContent)
   val currentRomSize = if (program.nonEmpty) testRomContent.length.U else ramSize.U
 
-  // Write Logic (for self-modifying code or bootloaders)
-  when(io.write_en) {
-    ram.write(io.write_addr >> 2.U, io.write_data)
-  }
+  when(io.write_en) { ram.write(io.write_addr >> 2.U, io.write_data) }
 
-  // === 2. PC LOGIC ===
+  // 2. PC LOGIC
   val pc = RegInit(0.U(32.W))
   val maxPC = currentRomSize * 4.U
   val halted = RegInit(false.B)
@@ -162,43 +156,30 @@ class InstructionFetch(program: Seq[UInt] = Seq(), programFile: String = "") ext
     io.predict_taken -> io.predicted_target
   ))
 
-  when(!halted && pc >= maxPC - 4.U) {
-    halted := true.B
-  }
-  
-  when(!halted && !io.stall) {
-    pc := next_pc
-  }
+  when(!halted && pc >= maxPC - 4.U) { halted := true.B }
+  when(!halted && !io.stall) { pc := next_pc }
 
-  // === 3. FETCH & ALIGNMENT LOGIC ===
-  
-  // A. Read RAM
-  // CRITICAL FIX: Do NOT subtract 0x8000. Read directly from PC.
-  // We read every cycle unless stalled.
+  // 3. FETCH & BUBBLE LOGIC
   val ramReadAddr = pc >> 2.U
-  val instrFromRam = ram.read(ramReadAddr, !io.stall)
-
-  // B. Handle ROM/Test vectors (Delayed to match RAM latency)
-  val safeIndex = (pc >> 2.U)(log2Ceil(testRomContent.length.max(1)) - 1, 0)
-  val instrFromRom = testRom(safeIndex)
-  val instrFromRomDelayed = RegNext(instrFromRom)
-
-  // C. PC Alignment Register
-  // CRITICAL FIX: Since data arrives 1 cycle late, we must delay the PC output
-  // so it matches the instruction arriving from RAM.
+  val instrFromRam = ram.read(ramReadAddr, !io.stall) // Sync Read (1 cycle latency)
+  
+  // Align PC with the instruction arriving 1 cycle later
   val pc_out_reg = RegEnable(pc, 0.U, !io.stall)
 
-  // D. Boot / Startup Logic
-  // On the very first cycle after reset, BRAM output is undefined.
-  // We inject a NOP (0x00000013) to clean the pipeline.
-  val booted = RegNext(true.B, false.B) 
+  // BUBBLE LOGIC: Mask the instruction if we just branched or are booting
+  val booted = RegNext(true.B, false.B)
+  // If branch_taken was true last cycle, the RAM output this cycle is garbage (Fallthrough).
+  // We must mask it with a NOP.
+  val just_branched = RegNext(io.branch_taken && !io.stall, false.B)
 
-  // E. Final Muxing
+  // ROM Logic
+  val safeIndex = (pc >> 2.U)(log2Ceil(testRomContent.length.max(1)) - 1, 0)
+  val instrFromRom = testRom(safeIndex)
+  val instrFromRomDelayed = RegNext(instrFromRom) // Delay ROM to match RAM latency
+
   val rawInstruction = Mux(hasTestProgram, instrFromRomDelayed, instrFromRam)
-
-  // Output NOP if halted or booting. Otherwise output fetched data.
-  io.instruction := Mux(halted || !booted, 0x00000013.U, rawInstruction)
   
-  // Output the ALIGNED PC (0, 4, 8...) matching the instruction
+  // Final Output Mux
+  io.instruction := Mux(halted || !booted || just_branched, 0x00000013.U, rawInstruction)
   io.pc := pc_out_reg
 }

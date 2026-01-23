@@ -1,4 +1,4 @@
-// USER INPUT: CSR_TIMING and UART_ADDR
+/*// USER INPUT: CSR_TIMING and UART_ADDR
 // #define CSR_EN TRUE
 // #define UART_ADDR 0x00001000
 // #define DEBUG_EN
@@ -126,8 +126,8 @@ __attribute__((noinline)) void run_benchmark() {
         *((volatile int*)0x64) = 1; // ON
         for(volatile int k=0; k<1000000; k++); 
     }
-}
-/*
+}*/
+
 // USER INPUT: CSR_TIMING and UART_ADDR
 // #define CSR_EN TRUE
 // #define UART_ADDR 0x00001000
@@ -346,4 +346,4 @@ int main()
 #endif
 
     return 0;
-}*/
+}
