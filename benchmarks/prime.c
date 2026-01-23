@@ -3,7 +3,7 @@
 // #define UART_ADDR 0x00001000
 // #define DEBUG_EN
 
-#define NUM_PRIMES 25
+/*#define NUM_PRIMES 25
 
 #define BOOL int
 #define TRUE 1
@@ -212,4 +212,40 @@ int main()
 #endif
 
     return 0;
+}*/
+
+// Definer UART base adresse (match din Core.scala)
+#define UART_BASE 0x1000
+typedef struct {
+    volatile int DATA;
+    volatile int STATUS;
+} uart_t;
+
+void delay(int count) {
+    for (int i = 0; i < count; i++) {
+        // 'asm' forhindrer compileren i at slette det tomme loop
+        __asm__("nop"); 
+    }
+}
+
+void main() {
+    uart_t* uart = (uart_t*)UART_BASE;
+    
+    // Send en start-indikator
+    while ((uart->STATUS & 0x1) == 0);
+    uart->DATA = 0xFF; 
+
+    while (1) {
+        // Send 'A'
+        while ((uart->STATUS & 0x1) == 0);
+        uart->DATA = 'A';
+
+        delay(50000); // Lille pause så terminalen kan følge med
+
+        // Send 'B'
+        while ((uart->STATUS & 0x1) == 0);
+        uart->DATA = 'B';
+
+        delay(50000);
+    }
 }
